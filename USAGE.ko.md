@@ -30,7 +30,7 @@
 ## 1. 설치
 
 ```bash
-npm install graphier three react react-dom
+npm install @cocorof/graphier three react react-dom
 ```
 
 **피어 의존성:**
@@ -46,7 +46,7 @@ npm install graphier three react react-dom
 ## 2. 빠른 시작
 
 ```tsx
-import { NetworkGraph3D, type GraphData } from "graphier";
+import { NetworkGraph3D, type GraphData } from "@cocorof/graphier";
 
 const data: GraphData = {
   nodes: [
@@ -82,7 +82,7 @@ import {
   NetworkGraph3D,
   type NetworkGraph3DRef,
   type GraphNode,
-} from "graphier";
+} from "@cocorof/graphier";
 
 function MyGraph() {
   const graphRef = useRef<NetworkGraph3DRef>(null);
@@ -232,14 +232,14 @@ const blob = await graphRef.current?.screenshot();
 <NetworkGraph3D data={data} theme="minimal" />
 
 // import로
-import { celestial, neon, minimal } from "graphier";
+import { celestial, neon, minimal } from "@cocorof/graphier";
 <NetworkGraph3D data={data} theme={celestial} />
 ```
 
 ### 커스텀 테마
 
 ```tsx
-import { celestial, type ThemeConfig } from "graphier";
+import { celestial, type ThemeConfig } from "@cocorof/graphier";
 
 const myTheme: ThemeConfig = {
   ...celestial,  // 프리셋 확장
@@ -405,7 +405,7 @@ const myTheme: ThemeConfig = {
 노드 상세 정보, 연결 목록, 3D 이웃 서브그래프를 보여주는 모달 패널:
 
 ```tsx
-import { NetworkGraph3D, NodeDetailPanel, type GraphNode } from "graphier";
+import { NetworkGraph3D, NodeDetailPanel, type GraphNode } from "@cocorof/graphier";
 
 function App() {
   const [detailNode, setDetailNode] = useState<GraphNode | null>(null);
@@ -482,7 +482,7 @@ function App() {
 경량 2D 서브그래프 렌더러 (캔버스 기반, Three.js 오버헤드 없음):
 
 ```tsx
-import { SubgraphView2D } from "graphier";
+import { SubgraphView2D } from "@cocorof/graphier";
 
 <SubgraphView2D
   data={data}
@@ -517,7 +517,7 @@ import { SubgraphView2D } from "graphier";
 Three.js 의존성이 **전혀 없는** 트리 셰이킹 가능한 분석 모듈:
 
 ```tsx
-import { analyzeGraph } from "graphier/analysis";
+import { analyzeGraph } from "@cocorof/graphier/analysis";
 
 const stats = analyzeGraph(data);
 
@@ -545,7 +545,7 @@ import {
   groupByType,
   buildAdjacencyMap,
   getNeighbors,
-} from "graphier/analysis";
+} from "@cocorof/graphier/analysis";
 
 // 차수 분석
 const degreeMap = computeDegreeMap(data);         // { nodeId: degree }
@@ -766,7 +766,7 @@ export default function Page() {
 // app/GraphView.tsx
 "use client";
 
-import { NetworkGraph3D } from "graphier";
+import { NetworkGraph3D } from "@cocorof/graphier";
 
 export default function GraphView() {
   return (
@@ -784,7 +784,7 @@ Turbopack을 사용하는 Next.js의 경우 `transpilePackages`에 `graphier`를
 ```js
 // next.config.js
 const nextConfig = {
-  transpilePackages: ["graphier"],
+  transpilePackages: ["@cocorof/graphier"],
 };
 export default nextConfig;
 ```
@@ -797,9 +797,9 @@ export default nextConfig;
 
 ```typescript
 // 컴포넌트
-export { NetworkGraph3D } from "graphier";
-export { NodeDetailPanel } from "graphier";
-export { SubgraphView2D } from "graphier";
+export { NetworkGraph3D } from "@cocorof/graphier";
+export { NodeDetailPanel } from "@cocorof/graphier";
+export { SubgraphView2D } from "@cocorof/graphier";
 
 // 타입
 export type {
@@ -823,7 +823,7 @@ export type {
   LinkEventHandler,
   BackgroundClickHandler,
   ResolvedTheme,
-} from "graphier";
+} from "@cocorof/graphier";
 
 // 상수 및 유틸리티
 export {
@@ -838,7 +838,7 @@ export {
   zoomToFitPositions,
   buildAdjacencyMapFromLinks,
   computeHighlightSet,
-} from "graphier";
+} from "@cocorof/graphier";
 
 // 분석 (트리 셰이킹 가능, 별도 엔트리 포인트)
 export {
@@ -853,7 +853,7 @@ export {
   groupByType,
   buildAdjacencyMap,
   getNeighbors,
-} from "graphier/analysis";
+} from "@cocorof/graphier/analysis";
 ```
 
 ---

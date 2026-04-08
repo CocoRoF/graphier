@@ -30,7 +30,7 @@
 ## 1. Installation
 
 ```bash
-npm install graphier three react react-dom
+npm install @cocorof/graphier three react react-dom
 ```
 
 **Peer dependencies:**
@@ -46,7 +46,7 @@ npm install graphier three react react-dom
 ## 2. Quick Start
 
 ```tsx
-import { NetworkGraph3D, type GraphData } from "graphier";
+import { NetworkGraph3D, type GraphData } from "@cocorof/graphier";
 
 const data: GraphData = {
   nodes: [
@@ -82,7 +82,7 @@ import {
   NetworkGraph3D,
   type NetworkGraph3DRef,
   type GraphNode,
-} from "graphier";
+} from "@cocorof/graphier";
 
 function MyGraph() {
   const graphRef = useRef<NetworkGraph3DRef>(null);
@@ -232,14 +232,14 @@ const blob = await graphRef.current?.screenshot();
 <NetworkGraph3D data={data} theme="minimal" />
 
 // By import
-import { celestial, neon, minimal } from "graphier";
+import { celestial, neon, minimal } from "@cocorof/graphier";
 <NetworkGraph3D data={data} theme={celestial} />
 ```
 
 ### Custom Theme
 
 ```tsx
-import { celestial, type ThemeConfig } from "graphier";
+import { celestial, type ThemeConfig } from "@cocorof/graphier";
 
 const myTheme: ThemeConfig = {
   ...celestial,  // extend a preset
@@ -405,7 +405,7 @@ This ensures good performance and visual quality across graph sizes.
 A pre-built modal panel that shows node details, connections, and a 3D neighborhood subgraph:
 
 ```tsx
-import { NetworkGraph3D, NodeDetailPanel, type GraphNode } from "graphier";
+import { NetworkGraph3D, NodeDetailPanel, type GraphNode } from "@cocorof/graphier";
 
 function App() {
   const [detailNode, setDetailNode] = useState<GraphNode | null>(null);
@@ -482,7 +482,7 @@ function App() {
 A lightweight 2D subgraph renderer (canvas-based, no Three.js overhead):
 
 ```tsx
-import { SubgraphView2D } from "graphier";
+import { SubgraphView2D } from "@cocorof/graphier";
 
 <SubgraphView2D
   data={data}
@@ -517,7 +517,7 @@ import { SubgraphView2D } from "graphier";
 A tree-shakeable analytics module with **zero Three.js dependency**:
 
 ```tsx
-import { analyzeGraph } from "graphier/analysis";
+import { analyzeGraph } from "@cocorof/graphier/analysis";
 
 const stats = analyzeGraph(data);
 
@@ -545,7 +545,7 @@ import {
   groupByType,
   buildAdjacencyMap,
   getNeighbors,
-} from "graphier/analysis";
+} from "@cocorof/graphier/analysis";
 
 // Degree analysis
 const degreeMap = computeDegreeMap(data);         // { nodeId: degree }
@@ -766,7 +766,7 @@ export default function Page() {
 // app/GraphView.tsx
 "use client";
 
-import { NetworkGraph3D } from "graphier";
+import { NetworkGraph3D } from "@cocorof/graphier";
 
 export default function GraphView() {
   return (
@@ -784,7 +784,7 @@ For Next.js with Turbopack, add `graphier` to `transpilePackages`:
 ```js
 // next.config.js
 const nextConfig = {
-  transpilePackages: ["graphier"],
+  transpilePackages: ["@cocorof/graphier"],
 };
 export default nextConfig;
 ```
@@ -797,9 +797,9 @@ export default nextConfig;
 
 ```typescript
 // Components
-export { NetworkGraph3D } from "graphier";
-export { NodeDetailPanel } from "graphier";
-export { SubgraphView2D } from "graphier";
+export { NetworkGraph3D } from "@cocorof/graphier";
+export { NodeDetailPanel } from "@cocorof/graphier";
+export { SubgraphView2D } from "@cocorof/graphier";
 
 // Types
 export type {
@@ -823,7 +823,7 @@ export type {
   LinkEventHandler,
   BackgroundClickHandler,
   ResolvedTheme,
-} from "graphier";
+} from "@cocorof/graphier";
 
 // Constants & Utilities
 export {
@@ -838,7 +838,7 @@ export {
   zoomToFitPositions,
   buildAdjacencyMapFromLinks,
   computeHighlightSet,
-} from "graphier";
+} from "@cocorof/graphier";
 
 // Analysis (tree-shakeable, separate entry point)
 export {
@@ -853,7 +853,7 @@ export {
   groupByType,
   buildAdjacencyMap,
   getNeighbors,
-} from "graphier/analysis";
+} from "@cocorof/graphier/analysis";
 ```
 
 ---

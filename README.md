@@ -24,7 +24,7 @@ High-performance 3D/2D graph renderer for React — powered by Three.js and d3-f
 ## Install
 
 ```bash
-npm install graphier three react react-dom
+npm install @cocorof/graphier three react react-dom
 ```
 
 **Peer dependencies:** `react >= 18`, `react-dom >= 18`, `three >= 0.150`
@@ -32,7 +32,7 @@ npm install graphier three react react-dom
 ## Quick Start
 
 ```tsx
-import { NetworkGraph3D } from "graphier";
+import { NetworkGraph3D } from "@cocorof/graphier";
 
 const data = {
   nodes: [
@@ -89,7 +89,7 @@ graphRef.current?.screenshot();
 ## Analysis Module
 
 ```tsx
-import { analyzeGraph } from "graphier/analysis";
+import { analyzeGraph } from "@cocorof/graphier/analysis";
 
 const stats = analyzeGraph(data);
 // stats.nodeCount, stats.density, stats.avgDegree, stats.topByDegree(10), ...
@@ -119,7 +119,7 @@ const GraphView = dynamic(() => import("./GraphView"), { ssr: false });
 
 ```js
 // next.config.js
-const nextConfig = { transpilePackages: ["graphier"] };
+const nextConfig = { transpilePackages: ["@cocorof/graphier"] };
 ```
 
 ## Architecture

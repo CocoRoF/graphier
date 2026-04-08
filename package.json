@@ -1,5 +1,5 @@
 {
-  "name": "graphier",
+  "name": "@cocorof/graphier",
   "version": "0.1.0",
   "description": "High-performance 3D/2D graph renderer for React — powered by Three.js and d3-force-3d",
   "type": "module",
@@ -37,8 +37,7 @@
     "three": ">=0.150.0"
   },
   "dependencies": {
-    "d3-force-3d": "^3.0.6",
-    "graphier": "file:graphier-0.1.0.tgz"
+    "d3-force-3d": "^3.0.6"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
@@ -68,7 +67,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/CocoRoF/graphier.git"
   },
-  "author": ""
+  "homepage": "https://github.com/CocoRoF/graphier#readme",
+  "bugs": {
+    "url": "https://github.com/CocoRoF/graphier/issues"
+  },
+  "author": "CocoRoF"
 }
