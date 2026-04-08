@@ -43,9 +43,13 @@ export function createLabelSystem(maxLabels: number): LabelState {
   };
 }
 
-/** Default label text extraction */
+/** Default label text extraction (matches original getLabelText) */
 function defaultLabelText(node: GraphNode): string {
   const label = node.label ?? node.id ?? "";
+  // For repo-type nodes, extract the last path component (e.g. "owner/repo" → "repo")
+  if (node.type === "repo" && label.includes("/")) {
+    return label.split("/").pop()!;
+  }
   return label.length > 30 ? label.substring(0, 27) + "\u2026" : label;
 }
 
@@ -109,7 +113,8 @@ export function updateLabels(
   labelScale: number,
   labelThreshold: number,
   maxLabels: number,
-  labelFormatter?: (node: GraphNode) => string
+  labelFormatter?: (node: GraphNode) => string,
+  highlightSet?: Map<string, number> | null
 ): void {
   if (
     !positions ||
@@ -130,8 +135,12 @@ export function updateLabels(
   const maxDistSq = maxDist * maxDist;
 
   // Find candidate nodes within range
+  // When a highlight set is active, only consider highlighted nodes
   const candidates: { idx: number; distSq: number; val: number }[] = [];
   for (let i = 0; i < nc; i++) {
+    // Skip non-highlighted nodes when selection is active
+    if (highlightSet && !highlightSet.has(nodes[i].id)) continue;
+
     const dx = positions[i * 3] - camPos.x;
     const dy = positions[i * 3 + 1] - camPos.y;
     const dz = positions[i * 3 + 2] - camPos.z;

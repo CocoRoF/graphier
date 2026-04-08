@@ -48,6 +48,11 @@ export interface StyleConfig {
   maxLabels?: number;
   /** Edge line width multiplier (default: 1.0). Note: WebGL limits linewidth to 1 on most platforms. */
   edgeWidthScale?: number;
+  /**
+   * Fly camera thrust speed multiplier (default: 1.0).
+   * 0.5 = half speed, 2.0 = double speed.
+   */
+  flySpeed?: number;
 }
 
 export const DEFAULT_STYLE: Required<StyleConfig> = {
@@ -65,4 +70,5 @@ export const DEFAULT_STYLE: Required<StyleConfig> = {
   showLabels: true,
   maxLabels: 150,
   edgeWidthScale: 1.0,
+  flySpeed: 1.0,
 };

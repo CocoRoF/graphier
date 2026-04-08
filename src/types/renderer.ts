@@ -10,6 +10,12 @@ export interface RendererConfig {
   antialias?: boolean;
   /** Max device pixel ratio (default: 1.5) */
   pixelRatioMax?: number;
+  /**
+   * Camera control mode:
+   * - "fly" (default): WASD/arrow thrust-based flight with inertia (matches original)
+   * - "orbit": z/x zoom, arrow keys orbit around target
+   */
+  cameraMode?: "fly" | "orbit";
 }
 
 export interface NetworkGraph3DRef {
@@ -39,6 +45,8 @@ export interface NetworkGraph3DRef {
   getRenderer(): THREE.WebGLRenderer | null;
   /** Access the Three.js camera */
   getCamera(): THREE.PerspectiveCamera | null;
-  /** Capture a screenshot as a Blob */
-  screenshot(): Promise<Blob | null>;
+  /** Capture a screenshot as a PNG data URL string (synchronous, matches original) */
+  captureScreenshot(): string | null;
+  /** Re-run force layout from current positions (useful after changing spreadFactor) */
+  reheatLayout(): void;
 }

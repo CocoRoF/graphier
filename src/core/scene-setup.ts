@@ -81,8 +81,9 @@ export function createScene(
   const labels = createLabelSystem(style.maxLabels);
   scene.add(labels.group);
 
-  // Keyboard controls (z/x zoom, arrow rotation) — scoped to container
-  const keyboard = setupKeyboardControls(camera, controls, container);
+  // Keyboard controls — scoped to container (default: fly mode, matching original)
+  const cameraMode = rendererConfig?.cameraMode ?? "fly";
+  const keyboard = setupKeyboardControls(camera, controls, container, cameraMode, style.flySpeed ?? 1.0);
 
   return {
     scene,

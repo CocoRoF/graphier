@@ -42,7 +42,12 @@ export type {
   NodeEventHandler,
   NullableNodeEventHandler,
   LinkEventHandler,
+  NullableLinkEventHandler,
   BackgroundClickHandler,
+  ContextMenuHandler,
+  NodeDragHandler,
+  LayoutSettledHandler,
+  LayoutTickHandler,
 } from "./types";
 export { DEFAULT_STYLE } from "./types/theme";
 export { DEFAULT_LAYOUT } from "./types/layout";

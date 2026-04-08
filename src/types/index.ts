@@ -12,6 +12,11 @@ export type {
   NodeEventHandler,
   NullableNodeEventHandler,
   LinkEventHandler,
+  NullableLinkEventHandler,
   BackgroundClickHandler,
+  ContextMenuHandler,
+  NodeDragHandler,
+  LayoutSettledHandler,
+  LayoutTickHandler,
 } from "./events";
 export type { RendererConfig, NetworkGraph3DRef } from "./renderer";

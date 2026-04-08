@@ -66,24 +66,29 @@ export function applyNodeHighlight(
       // Normal state
       tmpColor.set(baseColor);
     } else if (node.id === selectedNodeId) {
-      // Selected — near-white glow
+      // Selected — near-white HDR glow (exceeds 1.0 for bloom pickup)
       tmpColor.set(brightColor);
       brightTmp.setRGB(1, 1, 1);
-      tmpColor.lerp(brightTmp, 0.5);
+      tmpColor.lerp(brightTmp, 0.65);
+      tmpColor.multiplyScalar(1.4); // HDR overshoot for bloom magnet
+      // Clamp to 2.0 to prevent over-saturation (match original)
+      tmpColor.r = Math.min(tmpColor.r, 2.0);
+      tmpColor.g = Math.min(tmpColor.g, 2.0);
+      tmpColor.b = Math.min(tmpColor.b, 2.0);
     } else if (highlightSet.has(node.id)) {
       const hop = highlightSet.get(node.id)!;
       if (hop === 1) {
-        tmpColor.set(brightColor);
+        tmpColor.set(brightColor).multiplyScalar(1.2);
       } else if (hop === 2) {
         tmpColor.set(baseColor);
         brightTmp.set(brightColor);
-        tmpColor.lerp(brightTmp, 0.4);
+        tmpColor.lerp(brightTmp, 0.5);
       } else {
-        tmpColor.set(baseColor).multiplyScalar(0.7);
+        tmpColor.set(baseColor).multiplyScalar(0.6);
       }
     } else {
-      // Dimmed
-      tmpColor.set(baseColor).multiplyScalar(0.12);
+      // Heavily dimmed — nearly invisible
+      tmpColor.set(baseColor).multiplyScalar(0.04);
     }
 
     nodesMesh.setColorAt(i, tmpColor);
@@ -93,7 +98,7 @@ export function applyNodeHighlight(
   // Boost glow for highlights
   const mat = nodesMesh.material as THREE.ShaderMaterial;
   if (mat.uniforms?.uGlowIntensity) {
-    mat.uniforms.uGlowIntensity.value = highlightSet ? 1.15 : 1.0;
+    mat.uniforms.uGlowIntensity.value = highlightSet ? 1.5 : 1.0;
   }
 }
 
@@ -137,7 +142,7 @@ export function applyEdgeHighlight(
         tmpColor.multiplyScalar(1.2);
       }
     } else {
-      tmpColor.setRGB(0.03, 0.03, 0.06);
+      tmpColor.setRGB(0.01, 0.01, 0.02);
     }
 
     colorArr[i * 6 + 0] = tmpColor.r;

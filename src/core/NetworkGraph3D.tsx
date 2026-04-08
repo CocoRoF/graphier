@@ -30,7 +30,13 @@ import type {
   RendererConfig,
   NetworkGraph3DRef,
   NullableNodeEventHandler,
+  NullableLinkEventHandler,
   NodeEventHandler,
+  LinkEventHandler,
+  ContextMenuHandler,
+  NodeDragHandler,
+  LayoutSettledHandler,
+  LayoutTickHandler,
 } from "../types";
 import { DEFAULT_STYLE } from "../types";
 import { resolveTheme, type ResolvedTheme } from "../themes/resolve-theme";
@@ -70,6 +76,20 @@ export interface NetworkGraph3DProps {
   onNodeDoubleClick?: NodeEventHandler;
   /** Hover on a node (null = hover out) */
   onNodeHover?: NullableNodeEventHandler;
+  /** Right-click on a node — receives node + screen position for custom menu */
+  onContextMenu?: ContextMenuHandler;
+  /** Click on an edge/link */
+  onLinkClick?: LinkEventHandler;
+  /** Hover on an edge/link (null = hover out) */
+  onLinkHover?: NullableLinkEventHandler;
+  /** Node drag (fires continuously during drag) */
+  onNodeDrag?: NodeDragHandler;
+  /** Node drag end */
+  onNodeDragEnd?: NodeDragHandler;
+  /** Fired when force simulation converges */
+  onLayoutSettled?: LayoutSettledHandler;
+  /** Fired on each layout tick with current alpha */
+  onLayoutTick?: LayoutTickHandler;
   /** Currently selected node ID (controlled mode) */
   selectedNodeId?: string | null;
   /** Number of hops to highlight around selected node (default: 3) */
@@ -118,6 +138,13 @@ function NetworkGraph3DInner(
     onNodeClick,
     onNodeDoubleClick,
     onNodeHover,
+    onContextMenu,
+    onLinkClick,
+    onLinkHover,
+    onNodeDrag,
+    onNodeDragEnd,
+    onLayoutSettled,
+    onLayoutTick,
     selectedNodeId = null,
     highlightHops = 3,
     theme: themeProp,
@@ -163,13 +190,28 @@ function NetworkGraph3DInner(
   const onNodeClickRef = useRef(onNodeClick);
   const onNodeDoubleClickRef = useRef(onNodeDoubleClick);
   const onNodeHoverRef = useRef(onNodeHover);
+  const onContextMenuRef = useRef(onContextMenu);
+  const onLinkClickRef = useRef(onLinkClick);
+  const onLinkHoverRef = useRef(onLinkHover);
+  const onNodeDragRef = useRef(onNodeDrag);
+  const onNodeDragEndRef = useRef(onNodeDragEnd);
+  const onLayoutSettledRef = useRef(onLayoutSettled);
+  const onLayoutTickRef = useRef(onLayoutTick);
   const styleRef = useRef(resolvedStyle);
   const themeRef = useRef(resolvedTheme);
   const selectedNodeIdRef = useRef(selectedNodeId);
   const labelFormatterRef = useRef(labelFormatter);
+  const highlightSetRef = useRef<Map<string, number> | null>(null);
   onNodeClickRef.current = onNodeClick;
   onNodeDoubleClickRef.current = onNodeDoubleClick;
   onNodeHoverRef.current = onNodeHover;
+  onContextMenuRef.current = onContextMenu;
+  onLinkClickRef.current = onLinkClick;
+  onLinkHoverRef.current = onLinkHover;
+  onNodeDragRef.current = onNodeDrag;
+  onNodeDragEndRef.current = onNodeDragEnd;
+  onLayoutSettledRef.current = onLayoutSettled;
+  onLayoutTickRef.current = onLayoutTick;
   styleRef.current = resolvedStyle;
   themeRef.current = resolvedTheme;
   selectedNodeIdRef.current = selectedNodeId;
@@ -235,7 +277,7 @@ function NetworkGraph3DInner(
     );
     sceneRef.current = state;
 
-    // Animation loop with label updates
+    // Animation loop with label updates (highlight-aware)
     const cancelAnim = startAnimationLoop(state, () => {
       updateLabels(
         state.labels,
@@ -248,7 +290,8 @@ function NetworkGraph3DInner(
         styleRef.current.labelScale,
         styleRef.current.labelThreshold,
         styleRef.current.maxLabels,
-        labelFormatterRef.current
+        labelFormatterRef.current,
+        highlightSetRef.current
       );
     });
 
@@ -265,8 +308,40 @@ function NetworkGraph3DInner(
         onNodeClick: (node) => onNodeClickRef.current?.(node),
         onNodeDoubleClick: (node) => onNodeDoubleClickRef.current?.(node),
         onNodeHover: (node) => onNodeHoverRef.current?.(node),
+        onContextMenu: (node, pos) => onContextMenuRef.current?.(node, pos),
+        onLinkClick: (link) => onLinkClickRef.current?.(link),
+        onLinkHover: (link) => onLinkHoverRef.current?.(link),
+        onNodeDrag: (node, pos) => {
+          onNodeDragRef.current?.(node, pos);
+          // Update position in data
+          const d = dataRef.current;
+          const idx = d.nodeIdToIndex.get(node.id);
+          if (idx !== undefined && d.positions) {
+            d.positions[idx * 3] = pos.x;
+            d.positions[idx * 3 + 1] = pos.y;
+            d.positions[idx * 3 + 2] = pos.z;
+            (node as any).x = pos.x;
+            (node as any).y = pos.y;
+            (node as any).z = pos.z;
+            // Update node mesh position
+            const gObj = graphObjRef.current;
+            if (gObj && d.scales) {
+              updateNodePositions(gObj.nodesMesh, d.positions!, d.scales, d.nodes.length);
+            }
+          }
+        },
+        onNodeDragEnd: (node, pos) => onNodeDragEndRef.current?.(node, pos),
       },
-      container
+      container,
+      () => {
+        const d = dataRef.current;
+        return {
+          links: d.links as GraphLink[],
+          edgeNodeIndices: d.edgeNodeIndices,
+          edgeLinkIndices: d.edgeLinkIndices,
+          positions: d.positions,
+        };
+      }
     );
 
     return () => {
@@ -475,10 +550,14 @@ function NetworkGraph3DInner(
             );
           }
         }
+
+        // Layout tick callback
+        onLayoutTickRef.current?.(msg.alpha);
       }
 
       if (msg.type === "settled") {
         dataRef.current.settled = true;
+        onLayoutSettledRef.current?.();
       }
     };
 
@@ -532,6 +611,9 @@ function NetworkGraph3DInner(
     const theme = themeRef.current;
     const style = styleRef.current;
 
+    // Store highlight set for label system access
+    highlightSetRef.current = highlightSet;
+
     applyNodeHighlight(
       gObj.nodesMesh,
       d.nodes,
@@ -550,6 +632,20 @@ function NetworkGraph3DInner(
       d.nodes.length,
       theme
     );
+
+    // Dynamic bloom boost during selection (match original behavior)
+    if (sceneState.bloomPass) {
+      const style = styleRef.current;
+      if (highlightSet) {
+        sceneState.bloomPass.strength = style.bloomStrength * 1.8;
+        sceneState.bloomPass.radius = style.bloomRadius * 1.4;
+        sceneState.bloomPass.threshold = 0.25;
+      } else {
+        sceneState.bloomPass.strength = style.bloomStrength;
+        sceneState.bloomPass.radius = style.bloomRadius;
+        sceneState.bloomPass.threshold = style.bloomThreshold;
+      }
+    }
 
     const selectedNode = selectedNodeId
       ? d.nodes.find((n) => n.id === selectedNodeId)
@@ -645,6 +741,13 @@ function NetworkGraph3DInner(
     return () => clearInterval(id);
   }, [resolvedStyle.autoOrbit]);
 
+  // Fly speed live update
+  useEffect(() => {
+    const s = sceneRef.current;
+    if (!s) return;
+    s.keyboard.setFlySpeed(resolvedStyle.flySpeed);
+  }, [resolvedStyle.flySpeed]);
+
   /* ── Imperative API via ref ── */
   useImperativeHandle(ref, () => ({
     cameraPosition(pos, lookAt, duration = 1000) {
@@ -720,13 +823,24 @@ function NetworkGraph3DInner(
     getCamera() {
       return sceneRef.current?.camera ?? null;
     },
-    async screenshot() {
+    captureScreenshot() {
       const s = sceneRef.current;
       if (!s) return null;
       s.renderer.render(s.scene, s.camera);
-      return new Promise<Blob | null>((resolve) => {
-        s.renderer.domElement.toBlob(resolve, "image/png");
-      });
+      return s.renderer.domElement.toDataURL("image/png");
+    },
+    reheatLayout() {
+      // Force re-run of layout by resetting settled state
+      // The worker will be restarted on the next data change cycle
+      const gObj = graphObjRef.current;
+      if (gObj?.worker) {
+        gObj.worker.postMessage({ type: "stop" });
+        gObj.worker.terminate();
+        gObj.worker = null;
+      }
+      dataRef.current.settled = false;
+      // Trigger re-render by toggling appended data
+      setAppendedData((prev) => prev ? { ...prev } : { nodes: [], links: [] });
     },
   }));
 
