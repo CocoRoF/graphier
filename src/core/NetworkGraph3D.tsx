@@ -349,6 +349,7 @@ function NetworkGraph3DInner(
       resizeObserver.disconnect();
       interaction.cleanup();
       state.keyboard.cleanup();
+      state.scrollCleanup();
       state.controls.dispose();
       disposeObject(state.stars);
       disposeObject(state.selectionRing);

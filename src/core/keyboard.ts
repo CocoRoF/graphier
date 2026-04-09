@@ -29,19 +29,13 @@ export interface KeyboardControlState {
   setFlySpeed: (speed: number) => void;
 }
 
-/* ── Orbit mode constants ── */
-const ORBIT_ACCEL = 0.0012;
-const ORBIT_MAX_SPEED = 0.06;
-const ORBIT_DAMPING = 0.88;
+/* ── Orbit mode constants (constant speed, no acceleration) ── */
+const ORBIT_ROTATE_SPEED = 0.02;
 const ORBIT_ZOOM_FACTOR = 0.015;
-const ORBIT_DEAD_ZONE = 0.0001;
 
-/* ── Fly mode constants ── */
-const FLY_ACCEL = 0.006;
-const FLY_FRICTION = 0.92;
-const FLY_MAX_THRUST = 0.18;
+/* ── Fly mode constants (constant speed, no acceleration) ── */
+const FLY_THRUST_SPEED = 0.08;
 const FLY_TURN_RATE = 0.008;
-const FLY_DEAD_ZONE = 0.0002;
 
 // Reusable objects (avoid per-frame GC)
 const _offset = new THREE.Vector3();
@@ -50,61 +44,47 @@ const _q = new THREE.Quaternion();
 const _dir = new THREE.Vector3();
 const _worldUp = new THREE.Vector3(0, 1, 0);
 
-function clamp(v: number, min: number, max: number): number {
-  return v < min ? min : v > max ? max : v;
-}
-
-/* ── Orbit mode ── */
+/* ── Orbit mode (constant speed, no velocity/friction) ── */
 function createOrbitUpdate(
   camera: THREE.PerspectiveCamera,
   controls: OrbitControls,
   keys: Record<string, boolean>
 ): () => boolean {
-  const vel = { zoom: 0, azimuth: 0, polar: 0 };
-
   return function update(): boolean {
-    if (keys["z"] || keys["Z"]) vel.zoom -= ORBIT_ACCEL;
-    if (keys["x"] || keys["X"]) vel.zoom += ORBIT_ACCEL;
-    if (keys["ArrowLeft"])  vel.azimuth -= ORBIT_ACCEL;
-    if (keys["ArrowRight"]) vel.azimuth += ORBIT_ACCEL;
-    if (keys["ArrowUp"])    vel.polar -= ORBIT_ACCEL;
-    if (keys["ArrowDown"])  vel.polar += ORBIT_ACCEL;
+    let zoom = 0;
+    let azimuth = 0;
+    let polar = 0;
 
-    vel.zoom    = clamp(vel.zoom,    -ORBIT_MAX_SPEED, ORBIT_MAX_SPEED);
-    vel.azimuth = clamp(vel.azimuth, -ORBIT_MAX_SPEED, ORBIT_MAX_SPEED);
-    vel.polar   = clamp(vel.polar,   -ORBIT_MAX_SPEED, ORBIT_MAX_SPEED);
+    if (keys["z"] || keys["Z"]) zoom -= ORBIT_ROTATE_SPEED;
+    if (keys["x"] || keys["X"]) zoom += ORBIT_ROTATE_SPEED;
+    if (keys["ArrowLeft"])  azimuth -= ORBIT_ROTATE_SPEED;
+    if (keys["ArrowRight"]) azimuth += ORBIT_ROTATE_SPEED;
+    if (keys["ArrowUp"])    polar -= ORBIT_ROTATE_SPEED;
+    if (keys["ArrowDown"])  polar += ORBIT_ROTATE_SPEED;
 
-    vel.zoom    *= ORBIT_DAMPING;
-    vel.azimuth *= ORBIT_DAMPING;
-    vel.polar   *= ORBIT_DAMPING;
-
-    if (Math.abs(vel.zoom)    < ORBIT_DEAD_ZONE) vel.zoom = 0;
-    if (Math.abs(vel.azimuth) < ORBIT_DEAD_ZONE) vel.azimuth = 0;
-    if (Math.abs(vel.polar)   < ORBIT_DEAD_ZONE) vel.polar = 0;
-
-    const hasMotion = vel.zoom !== 0 || vel.azimuth !== 0 || vel.polar !== 0;
+    const hasMotion = zoom !== 0 || azimuth !== 0 || polar !== 0;
     if (!hasMotion) return false;
 
     const target = controls.target as THREE.Vector3;
     _offset.copy(camera.position).sub(target);
     let radius = _offset.length();
 
-    if (vel.zoom !== 0) {
-      radius *= (1 + vel.zoom * ORBIT_ZOOM_FACTOR * radius * 0.01);
+    if (zoom !== 0) {
+      radius *= (1 + zoom * ORBIT_ZOOM_FACTOR * radius * 0.01);
       radius = Math.max(controls.minDistance, Math.min(controls.maxDistance, radius));
     }
 
-    if (vel.azimuth !== 0) {
-      _q.setFromAxisAngle(camera.up, -vel.azimuth);
+    if (azimuth !== 0) {
+      _q.setFromAxisAngle(camera.up, -azimuth);
       _offset.applyQuaternion(_q);
     }
 
-    if (vel.polar !== 0) {
+    if (polar !== 0) {
       _right.copy(_offset).normalize().cross(camera.up).normalize();
       if (_right.lengthSq() < 0.001) {
         _right.setFromMatrixColumn(camera.matrixWorld, 0);
       }
-      _q.setFromAxisAngle(_right, vel.polar);
+      _q.setFromAxisAngle(_right, polar);
       _offset.applyQuaternion(_q);
       camera.up.applyQuaternion(_q).normalize();
     }
@@ -118,73 +98,60 @@ function createOrbitUpdate(
   };
 }
 
-/* ── Fly mode ── */
+/* ── Fly mode (constant speed, no velocity/friction) ── */
 function createFlyUpdate(
   camera: THREE.PerspectiveCamera,
   controls: OrbitControls,
   keys: Record<string, boolean>,
   state: { flySpeed: number }
 ): () => boolean {
-  const vel = { thrust: 0, yaw: 0, pitch: 0 };
-
   return function update(): boolean {
     const speedMul = state.flySpeed;
 
+    let thrust = 0;
+    let yaw = 0;
+    let pitch = 0;
+
     // Thrust (forward / backward along camera direction)
-    if (keys["z"] || keys["Z"]) vel.thrust += FLY_ACCEL * speedMul;
-    if (keys["x"] || keys["X"]) vel.thrust -= FLY_ACCEL * speedMul;
+    if (keys["z"] || keys["Z"]) thrust += FLY_THRUST_SPEED * speedMul;
+    if (keys["x"] || keys["X"]) thrust -= FLY_THRUST_SPEED * speedMul;
 
     // Yaw (left / right)
-    if (keys["a"] || keys["A"] || keys["ArrowLeft"])  vel.yaw += FLY_TURN_RATE;
-    if (keys["d"] || keys["D"] || keys["ArrowRight"]) vel.yaw -= FLY_TURN_RATE;
+    if (keys["a"] || keys["A"] || keys["ArrowLeft"])  yaw += FLY_TURN_RATE;
+    if (keys["d"] || keys["D"] || keys["ArrowRight"]) yaw -= FLY_TURN_RATE;
 
     // Pitch (up / down)
-    if (keys["w"] || keys["W"] || keys["ArrowUp"])    vel.pitch += FLY_TURN_RATE;
-    if (keys["s"] || keys["S"] || keys["ArrowDown"])  vel.pitch -= FLY_TURN_RATE;
+    if (keys["w"] || keys["W"] || keys["ArrowUp"])    pitch += FLY_TURN_RATE;
+    if (keys["s"] || keys["S"] || keys["ArrowDown"])  pitch -= FLY_TURN_RATE;
 
-    // Distance-scaled clamping bounds
-    const lookDist = camera.position.distanceTo(controls.target as THREE.Vector3);
-    const distScale = Math.max(0.3, lookDist * 0.003);
-
-    vel.thrust = clamp(vel.thrust, -FLY_MAX_THRUST * distScale * speedMul, FLY_MAX_THRUST * distScale * speedMul);
-    vel.yaw    = clamp(vel.yaw,    -FLY_TURN_RATE * 2, FLY_TURN_RATE * 2);
-    vel.pitch  = clamp(vel.pitch,  -FLY_TURN_RATE * 2, FLY_TURN_RATE * 2);
-
-    vel.thrust *= FLY_FRICTION;
-    vel.yaw    *= FLY_FRICTION;
-    vel.pitch  *= FLY_FRICTION;
-
-    if (Math.abs(vel.thrust) < FLY_DEAD_ZONE) vel.thrust = 0;
-    if (Math.abs(vel.yaw)    < FLY_DEAD_ZONE) vel.yaw = 0;
-    if (Math.abs(vel.pitch)  < FLY_DEAD_ZONE) vel.pitch = 0;
-
-    const hasMotion = vel.thrust !== 0 || vel.yaw !== 0 || vel.pitch !== 0;
+    const hasMotion = thrust !== 0 || yaw !== 0 || pitch !== 0;
     if (!hasMotion) return false;
 
     // ── Yaw: rotate around world Y axis ──
-    // Fix: when camera is upside-down (up·worldY < 0), invert yaw
+    // When camera is upside-down (up·worldY < 0), invert yaw
     // so that "left" input always moves the view left on screen.
-    if (vel.yaw !== 0) {
+    if (yaw !== 0) {
       const upDot = camera.up.dot(_worldUp);
       const yawSign = upDot < 0 ? -1 : 1;
-      _q.setFromAxisAngle(_worldUp, vel.yaw * yawSign);
+      _q.setFromAxisAngle(_worldUp, yaw * yawSign);
       camera.quaternion.premultiply(_q);
-      // Co-rotate the up vector so it stays consistent
       camera.up.applyQuaternion(_q).normalize();
     }
 
     // ── Pitch: rotate around camera-local right axis ──
-    if (vel.pitch !== 0) {
+    if (pitch !== 0) {
       _right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
-      _q.setFromAxisAngle(_right, vel.pitch);
+      _q.setFromAxisAngle(_right, pitch);
       camera.quaternion.premultiply(_q);
       camera.up.applyQuaternion(_q).normalize();
     }
 
     // ── Thrust: move along camera's forward direction ──
-    if (vel.thrust !== 0) {
+    if (thrust !== 0) {
+      const lookDist = camera.position.distanceTo(controls.target as THREE.Vector3);
+      const distScale = Math.max(0.3, lookDist * 0.003);
       camera.getWorldDirection(_dir);
-      _dir.multiplyScalar(vel.thrust * distScale * 100);
+      _dir.multiplyScalar(thrust * distScale * 100);
       camera.position.add(_dir);
       (controls.target as THREE.Vector3).add(_dir);
     }

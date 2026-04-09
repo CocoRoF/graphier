@@ -26,6 +26,7 @@ export interface SceneState {
   composer: EffectComposer | null;
   bloomPass: UnrealBloomPass | null;
   keyboard: KeyboardControlState;
+  scrollCleanup: () => void;
 }
 
 export function createScene(
@@ -85,6 +86,24 @@ export function createScene(
   const cameraMode = rendererConfig?.cameraMode ?? "fly";
   const keyboard = setupKeyboardControls(camera, controls, container, cameraMode, style.flySpeed ?? 1.0);
 
+  // Custom scroll handler: linear zoom without acceleration/inertia.
+  // Moves camera + target along look direction, proportional to scroll delta.
+  controls.enableZoom = false;
+  const _wheelDir = new THREE.Vector3();
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    let delta = -e.deltaY;
+    if (e.deltaMode === 1) delta *= 40;   // line → pixels
+    if (e.deltaMode === 2) delta *= 800;  // page → pixels
+    camera.getWorldDirection(_wheelDir);
+    const dist = camera.position.distanceTo(controls.target as THREE.Vector3);
+    const moveAmount = delta * 0.002 * Math.max(dist * 0.1, 1);
+    camera.position.addScaledVector(_wheelDir, moveAmount);
+    (controls.target as THREE.Vector3).addScaledVector(_wheelDir, moveAmount);
+  };
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  const scrollCleanup = () => canvas.removeEventListener("wheel", onWheel);
+
   return {
     scene,
     camera,
@@ -96,6 +115,7 @@ export function createScene(
     composer: null,
     bloomPass: null,
     keyboard,
+    scrollCleanup,
   };
 }
 
@@ -134,12 +154,31 @@ export function startAnimationLoop(
   onTick?: () => void
 ): () => void {
   let animFrame: number;
+  let wasKeyboardActive = false;
+  const _syncDir = new THREE.Vector3();
 
   function animate() {
     animFrame = requestAnimationFrame(animate);
     // When keyboard is driving camera, skip OrbitControls.update()
     // to prevent its polar angle clamping from overriding our rotation
     const keyboardActive = state.keyboard.update();
+
+    // When keyboard navigation just stopped, sync OrbitControls to
+    // current camera state so the view doesn't snap back.
+    if (wasKeyboardActive && !keyboardActive) {
+      const dist = state.camera.position.distanceTo(
+        state.controls.target as THREE.Vector3
+      );
+      state.camera.getWorldDirection(_syncDir);
+      (state.controls.target as THREE.Vector3)
+        .copy(state.camera.position)
+        .add(_syncDir.multiplyScalar(dist));
+      // Reset up to world-Y so OrbitControls works correctly
+      state.camera.up.set(0, 1, 0);
+      state.camera.lookAt(state.controls.target as THREE.Vector3);
+    }
+    wasKeyboardActive = keyboardActive;
+
     if (!keyboardActive) state.controls.update();
 
     if (state.selectionRing.visible) {
