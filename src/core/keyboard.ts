@@ -30,12 +30,12 @@ export interface KeyboardControlState {
 }
 
 /* ── Orbit mode constants (constant speed, no acceleration) ── */
-const ORBIT_ROTATE_SPEED = 0.02;
+const ORBIT_ROTATE_SPEED = 0.034;
 const ORBIT_ZOOM_FACTOR = 0.015;
 
 /* ── Fly mode constants (constant speed, no acceleration) ── */
-const FLY_THRUST_SPEED = 0.08;
-const FLY_TURN_RATE = 0.008;
+const FLY_THRUST_SPEED = 0.056;
+const FLY_TURN_RATE = 0.0136;
 
 // Reusable objects (avoid per-frame GC)
 const _offset = new THREE.Vector3();
