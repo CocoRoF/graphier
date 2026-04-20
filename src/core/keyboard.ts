@@ -4,6 +4,7 @@
  * **Orbit mode**:
  *   z / x        → zoom in / out (acceleration toward/away from target)
  *   Arrow keys   → orbit camera (rotate around target) — full 360°
+ *   Azimuth auto-corrects when camera is upside down (past 180° pitch).
  *
  * **Fly mode** (default):
  *   Z / X        → thrust forward / backward
@@ -75,7 +76,12 @@ function createOrbitUpdate(
     }
 
     if (azimuth !== 0) {
-      _q.setFromAxisAngle(camera.up, -azimuth);
+      // When camera.up is flipped (past 180° pitch), rotating around the flipped
+      // axis reverses the azimuth direction on screen — causing left/right inversion.
+      // Flip the sign so orbit direction stays consistent regardless of orientation.
+      const upDot = camera.up.dot(_worldUp);
+      const azSign = upDot < 0 ? -1 : 1;
+      _q.setFromAxisAngle(camera.up, -azimuth * azSign);
       _offset.applyQuaternion(_q);
     }
 
