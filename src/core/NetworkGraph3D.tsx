@@ -47,7 +47,7 @@ import {
   initBloom,
   startAnimationLoop,
   setupResize,
-  applyCameraMode2D,
+  applyNavigationMode,
   type SceneState,
 } from "./scene-setup";
 import { createNodeMesh, computeNodeScales, updateNodePositions } from "./node-mesh";
@@ -786,11 +786,13 @@ function NetworkGraph3DInner(
     }
   }, [visibleSet, linkVisibility, mergedData]);
 
-  /* ── Effect 2c: 2D/3D camera mode ── */
+  /* ── Effect 2c: navigation scheme (2D/3D + overrides) ── */
+  const navKey = JSON.stringify(rendererProp?.navigation ?? null);
   useEffect(() => {
     const s = sceneRef.current;
-    if (s) applyCameraMode2D(s, is2D);
-  }, [is2D]);
+    if (s) applyNavigationMode(s, is2D, rendererProp?.navigation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [is2D, navKey]);
 
   /* ── Effect 3: Selection visual update ── */
   useEffect(() => {
@@ -1078,13 +1080,15 @@ function NetworkGraph3DInner(
       const s = sceneRef.current;
       if (!s) return null;
       const cam = s.camera;
-      // Frustum footprint on the z=0 plane (exact for the axis-aligned
-      // 2D camera; an approximation when the 3D camera is tilted).
-      const dist = Math.abs(cam.position.z);
+      const t = s.controls.target as THREE.Vector3;
+      // Frustum footprint around the orbit target (exact for the
+      // axis-aligned 2D camera; a serviceable approximation when the
+      // 3D camera is rotated — sized by camera→target distance).
+      const dist = Math.max(cam.position.distanceTo(t), 1);
       const halfH = Math.tan((cam.fov * Math.PI) / 360) * dist;
       return {
-        cx: cam.position.x,
-        cy: cam.position.y,
+        cx: t.x,
+        cy: t.y,
         halfW: halfH * cam.aspect,
         halfH,
       };

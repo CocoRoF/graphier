@@ -929,6 +929,18 @@ GPU buffer update (~O(n) matrix writes, no layout jump).
 - `hoverHighlight` — Obsidian-style neighborhood emphasis on hover; an
   explicit `selectedNodeId` always wins over hover.
 
+### Navigation overrides (v1.4.2)
+
+```tsx
+<NetworkGraph3D
+  renderer={{ navigation: { leftButton: "pan", rightButton: "rotate", keyboard: "pan" } }}
+/>
+```
+
+Remaps pointer buttons and the keyboard scheme independently of layout
+dimensionality. Defaults — 3D: left=rotate, right=pan, keyboard=`cameraMode`;
+2D: left=pan, right=rotate, keyboard="pan". `keyboard: "off"` disables keys.
+
 ### Cluster force
 
 ```tsx

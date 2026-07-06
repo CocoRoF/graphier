@@ -46,6 +46,7 @@ const ref = useRef<NetworkGraph3DRef>(null);
 - `visibleNodeIds` — client-side filter; hidden nodes/edges/labels vanish via per-instance scale + collapsed segments. Positions are preserved: toggling filters never reheats the simulation.
 - `hoverHighlight` / `hoverHighlightHops` — Obsidian-style neighborhood emphasis on hover (selection wins while active).
 - `theme="paper"` — light background preset; edge blending switches to normal automatically (additive lines vanish on white) and highlight/dim directions invert.
+- `renderer.navigation` — remap pointer/keyboard navigation per consumer, e.g. `{ leftButton: "pan", rightButton: "rotate", keyboard: "pan" }` for pan-first 3D graphs (v1.4.2).
 - `GraphMinimap` — 2D-canvas overview (no second WebGL context): draws all visible nodes + the camera viewport rectangle, click/drag to pan. Powered by `ref.getGraphSnapshot()` / `ref.getViewportRect()` / `ref.panTo(x, y)`.
 
 ## Install

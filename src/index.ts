@@ -42,6 +42,7 @@ export type {
   StyleConfig,
   LayoutConfig,
   RendererConfig,
+  NavigationConfig,
   NetworkGraph3DRef,
   GraphSnapshot,
   ViewportRect,

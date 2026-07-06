@@ -21,6 +21,7 @@ export type {
 } from "./events";
 export type {
   RendererConfig,
+  NavigationConfig,
   NetworkGraph3DRef,
   GraphSnapshot,
   ViewportRect,

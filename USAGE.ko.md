@@ -929,6 +929,18 @@ export {
 - `hoverHighlight` — 호버 시 이웃 강조(Obsidian 스타일). 명시적
   `selectedNodeId`가 항상 호버보다 우선합니다.
 
+### 내비게이션 오버라이드 (v1.4.2)
+
+```tsx
+<NetworkGraph3D
+  renderer={{ navigation: { leftButton: "pan", rightButton: "rotate", keyboard: "pan" } }}
+/>
+```
+
+레이아웃 차원과 무관하게 포인터 버튼과 키보드 스킴을 개별 재매핑합니다.
+기본값 — 3D: 좌=회전, 우=팬, 키보드=`cameraMode`; 2D: 좌=팬, 우=회전,
+키보드="pan". `keyboard: "off"`는 키 입력을 끕니다.
+
 ### 클러스터 포스
 
 ```tsx

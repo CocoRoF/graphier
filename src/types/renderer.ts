@@ -16,6 +16,25 @@ export interface RendererConfig {
    * - "orbit": z/x zoom, arrow keys orbit around target
    */
   cameraMode?: "fly" | "orbit";
+  /**
+   * Pointer/keyboard navigation overrides. Defaults depend on layout
+   * dimensionality — 3D: left=rotate, right=pan, keyboard=cameraMode;
+   * 2D: left=pan, right=rotate, keyboard="pan".
+   */
+  navigation?: NavigationConfig;
+}
+
+export interface NavigationConfig {
+  /** What left-drag does (default: "rotate" in 3D, "pan" in 2D) */
+  leftButton?: "rotate" | "pan";
+  /** What right-drag does (default: "pan" in 3D, "rotate" in 2D) */
+  rightButton?: "rotate" | "pan";
+  /**
+   * Keyboard scheme — "pan": arrows/WASD pan + z/x zoom; "fly": thrust
+   * flight; "orbit": orbit around target; "off": disabled.
+   * (default: cameraMode in 3D, "pan" in 2D)
+   */
+  keyboard?: "fly" | "orbit" | "pan" | "off";
 }
 
 /** Raw per-frame node buffers for lightweight overlays (e.g. minimap) */

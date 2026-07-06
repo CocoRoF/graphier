@@ -6,7 +6,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import type { RendererConfig, StyleConfig } from "../types";
+import type { NavigationConfig, RendererConfig, StyleConfig } from "../types";
 import { createStarField } from "./effects";
 import { createSelectionRing } from "./selection";
 import {
@@ -128,29 +128,51 @@ export function createScene(
   };
 }
 
+const MOUSE_ACTION = {
+  rotate: THREE.MOUSE.ROTATE,
+  pan: THREE.MOUSE.PAN,
+} as const;
+
 /**
- * Switch camera controls between 3D orbit/fly and flat 2D pan/zoom.
- * In 2D: rotation off, left-drag pans in screen space, wheel/pinch dollies
- * via OrbitControls, keyboard flight disabled, camera snaps to face the
- * z=0 plane head-on.
+ * Apply the navigation scheme for the current layout dimensionality,
+ * honouring per-consumer overrides. Defaults — 3D: left=rotate,
+ * right=pan, keyboard=cameraMode; 2D: left=pan, right=rotate,
+ * keyboard="pan" (and the camera snaps to face the z=0 plane head-on).
  */
-export function applyCameraMode2D(state: SceneState, is2D: boolean): void {
+export function applyNavigationMode(
+  state: SceneState,
+  is2D: boolean,
+  nav?: NavigationConfig
+): void {
   const { controls, camera, keyboard } = state;
   state.flags.is2D = is2D;
-  controls.enableRotate = true;
+
+  const left = nav?.leftButton ?? (is2D ? "pan" : "rotate");
+  const right = nav?.rightButton ?? (is2D ? "rotate" : "pan");
+  controls.mouseButtons = {
+    LEFT: MOUSE_ACTION[left],
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: MOUSE_ACTION[right],
+  };
+  controls.enableRotate = left === "rotate" || right === "rotate";
+  controls.touches =
+    left === "pan"
+      ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }
+      : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+  // 2D uses OrbitControls dolly (wheel + pinch); 3D keeps the custom
+  // linear wheel handler registered in createScene.
   controls.enableZoom = is2D;
   controls.screenSpacePanning = is2D;
-  keyboard.setEnabled(true);
-  keyboard.setMode(is2D ? "pan" : state.flags.keyboardMode3D);
+
+  const kb = nav?.keyboard ?? (is2D ? "pan" : state.flags.keyboardMode3D);
+  if (kb === "off") {
+    keyboard.setEnabled(false);
+  } else {
+    keyboard.setEnabled(true);
+    keyboard.setMode(kb);
+  }
+
   if (is2D) {
-    // Left-drag pans the canvas, right-drag tilts/orbits the 3D world,
-    // wheel/pinch zooms — matching common 3D-graph conventions.
-    controls.mouseButtons = {
-      LEFT: THREE.MOUSE.PAN,
-      MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.ROTATE,
-    };
-    controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
     // Snap to a head-on view of the plane, keeping the current distance
     const t = controls.target as THREE.Vector3;
     const dist = Math.max(camera.position.distanceTo(t), 50);
@@ -158,13 +180,6 @@ export function applyCameraMode2D(state: SceneState, is2D: boolean): void {
     camera.up.set(0, 1, 0);
     camera.position.set(t.x, t.y, dist);
     camera.lookAt(t);
-  } else {
-    controls.mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE,
-      MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.PAN,
-    };
-    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   }
   controls.update();
 }
