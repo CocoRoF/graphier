@@ -23,6 +23,12 @@ export interface InteractionOptions {
   getClickToFocus?: () => boolean;
   /** 2D mode: click-focus pans in-plane instead of orbit-framing */
   getIs2D?: () => boolean;
+  /**
+   * When false, pointer-down on a node never starts a node drag, so
+   * left-drag always reaches the camera controls (pan/rotate). Essential
+   * for dense graphs where nearly every pixel raycasts to a node.
+   */
+  getNodeDragEnabled?: () => boolean;
 }
 
 export interface InteractionState {
@@ -76,7 +82,7 @@ export function setupInteraction(
     }
 
     // Check for node hit for potential drag
-    if (callbacks.onNodeDrag) {
+    if (callbacks.onNodeDrag && (options?.getNodeDragEnabled?.() ?? true)) {
       const nodesMesh = getNodesMesh();
       if (nodesMesh) {
         const rect = canvas.getBoundingClientRect();

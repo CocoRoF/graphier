@@ -30,6 +30,8 @@ export interface KeyboardControlState {
   setFlySpeed: (speed: number) => void;
   /** Enable/disable keyboard camera control (disabled in 2D mode) */
   setEnabled: (enabled: boolean) => void;
+  /** Switch control scheme at runtime ("pan" is used by 2D mode) */
+  setMode: (mode: "fly" | "orbit" | "pan") => void;
 }
 
 /* ── Orbit mode constants (constant speed, no acceleration) ── */
@@ -46,6 +48,64 @@ const _right = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _dir = new THREE.Vector3();
 const _worldUp = new THREE.Vector3(0, 1, 0);
+
+/* ── Pan mode constants (2D plane navigation) ── */
+const PAN_SPEED = 0.02;   // fraction of camera-target distance per frame
+const PAN_ZOOM_FACTOR = 0.02;
+
+/* ── Pan mode: arrows/WASD pan in screen space, z/x dolly (2D mode) ── */
+function createPanUpdate(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  keys: Record<string, boolean>
+): () => boolean {
+  const _panRight = new THREE.Vector3();
+  const _panUp = new THREE.Vector3();
+  const _panOffset = new THREE.Vector3();
+
+  return function update(): boolean {
+    let dx = 0;
+    let dy = 0;
+    if (keys["ArrowLeft"] || keys["a"] || keys["A"]) dx -= 1;
+    if (keys["ArrowRight"] || keys["d"] || keys["D"]) dx += 1;
+    if (keys["ArrowUp"] || keys["w"] || keys["W"]) dy += 1;
+    if (keys["ArrowDown"] || keys["s"] || keys["S"]) dy -= 1;
+    const zoomIn = keys["z"] || keys["Z"] || keys["+"] || keys["="];
+    const zoomOut = keys["x"] || keys["X"] || keys["-"] || keys["_"];
+
+    if (!dx && !dy && !zoomIn && !zoomOut) return false;
+
+    const target = controls.target as THREE.Vector3;
+    const dist = camera.position.distanceTo(target);
+
+    if (dx || dy) {
+      // Screen-aligned pan: move camera + target along the camera's
+      // local right/up axes so it stays intuitive when the plane is tilted
+      const step = Math.max(dist, 50) * PAN_SPEED;
+      _panRight.setFromMatrixColumn(camera.matrix, 0);
+      _panUp.setFromMatrixColumn(camera.matrix, 1);
+      _panOffset
+        .set(0, 0, 0)
+        .addScaledVector(_panRight, dx * step)
+        .addScaledVector(_panUp, dy * step);
+      camera.position.add(_panOffset);
+      target.add(_panOffset);
+    }
+
+    if (zoomIn || zoomOut) {
+      const factor = zoomIn ? -PAN_ZOOM_FACTOR : PAN_ZOOM_FACTOR;
+      _panOffset.copy(camera.position).sub(target);
+      const newLen = Math.max(
+        controls.minDistance,
+        Math.min(controls.maxDistance, _panOffset.length() * (1 + factor))
+      );
+      _panOffset.setLength(newLen);
+      camera.position.copy(target).add(_panOffset);
+    }
+
+    return true;
+  };
+}
 
 /* ── Orbit mode (constant speed, no velocity/friction) ── */
 function createOrbitUpdate(
@@ -172,7 +232,7 @@ export function setupKeyboardControls(
   camera: THREE.PerspectiveCamera,
   controls: OrbitControls,
   container: HTMLElement,
-  mode: "fly" | "orbit" = "fly",
+  mode: "fly" | "orbit" | "pan" = "fly",
   flySpeed: number = 1.0
 ): KeyboardControlState {
   const keys: Record<string, boolean> = {};
@@ -195,10 +255,13 @@ export function setupKeyboardControls(
   container.addEventListener("blur", onBlur);
 
   let enabled = true;
-  const innerUpdate = mode === "fly"
-    ? createFlyUpdate(camera, controls, keys, state)
-    : createOrbitUpdate(camera, controls, keys);
-  const updateFn = () => (enabled ? innerUpdate() : false);
+  let currentMode: "fly" | "orbit" | "pan" = mode;
+  const updaters: Record<"fly" | "orbit" | "pan", () => boolean> = {
+    fly: createFlyUpdate(camera, controls, keys, state),
+    orbit: createOrbitUpdate(camera, controls, keys),
+    pan: createPanUpdate(camera, controls, keys),
+  };
+  const updateFn = () => (enabled ? updaters[currentMode]() : false);
 
   function cleanup() {
     container.removeEventListener("keydown", onKeyDown);
@@ -215,5 +278,10 @@ export function setupKeyboardControls(
     if (!on) for (const k of Object.keys(keys)) keys[k] = false;
   }
 
-  return { update: updateFn, cleanup, setFlySpeed, setEnabled };
+  function setMode(m: "fly" | "orbit" | "pan") {
+    currentMode = m;
+    for (const k of Object.keys(keys)) keys[k] = false;
+  }
+
+  return { update: updateFn, cleanup, setFlySpeed, setEnabled, setMode };
 }

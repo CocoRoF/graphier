@@ -28,7 +28,7 @@ export interface SceneState {
   keyboard: KeyboardControlState;
   scrollCleanup: () => void;
   /** Mutable runtime flags shared with input handlers */
-  flags: { is2D: boolean };
+  flags: { is2D: boolean; keyboardMode3D: "fly" | "orbit" };
 }
 
 export function createScene(
@@ -92,7 +92,10 @@ export function createScene(
   // Moves camera + target along look direction, proportional to scroll delta.
   // In 2D mode OrbitControls handles wheel + pinch itself (enableZoom).
   controls.enableZoom = false;
-  const flags = { is2D: false };
+  const flags: { is2D: boolean; keyboardMode3D: "fly" | "orbit" } = {
+    is2D: false,
+    keyboardMode3D: cameraMode,
+  };
   const _wheelDir = new THREE.Vector3();
   const onWheel = (e: WheelEvent) => {
     if (flags.is2D) return;
@@ -134,15 +137,18 @@ export function createScene(
 export function applyCameraMode2D(state: SceneState, is2D: boolean): void {
   const { controls, camera, keyboard } = state;
   state.flags.is2D = is2D;
-  controls.enableRotate = !is2D;
+  controls.enableRotate = true;
   controls.enableZoom = is2D;
   controls.screenSpacePanning = is2D;
-  keyboard.setEnabled(!is2D);
+  keyboard.setEnabled(true);
+  keyboard.setMode(is2D ? "pan" : state.flags.keyboardMode3D);
   if (is2D) {
+    // Left-drag pans the canvas, right-drag tilts/orbits the 3D world,
+    // wheel/pinch zooms — matching common 3D-graph conventions.
     controls.mouseButtons = {
       LEFT: THREE.MOUSE.PAN,
       MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.PAN,
+      RIGHT: THREE.MOUSE.ROTATE,
     };
     controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
     // Snap to a head-on view of the plane, keeping the current distance

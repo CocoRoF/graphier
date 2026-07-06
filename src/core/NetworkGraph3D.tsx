@@ -120,6 +120,12 @@ export interface NetworkGraph3DProps {
    * simulation untouched. null/undefined shows all edges.
    */
   linkVisibility?: ((link: GraphLink) => boolean) | null;
+  /**
+   * Allow dragging individual nodes (default: true). Set false on dense
+   * graphs so left-drag always pans/orbits the camera instead of grabbing
+   * whichever node happens to be under the pointer.
+   */
+  enableNodeDrag?: boolean;
   /** Fly the camera to a node on single-click (default: true) */
   clickToFocus?: boolean;
   /** Highlight a node's neighborhood on hover when nothing is selected (default: false) */
@@ -175,6 +181,7 @@ function NetworkGraph3DInner(
     nodeValueAccessor,
     visibleNodeIds,
     linkVisibility,
+    enableNodeDrag = true,
     clickToFocus = true,
     hoverHighlight = false,
     hoverHighlightHops = 1,
@@ -228,6 +235,7 @@ function NetworkGraph3DInner(
   const labelFormatterRef = useRef(labelFormatter);
   const highlightSetRef = useRef<Map<string, number> | null>(null);
   const clickToFocusRef = useRef(clickToFocus);
+  const enableNodeDragRef = useRef(enableNodeDrag);
   const hoverHighlightRef = useRef(hoverHighlight);
   const hoverHighlightHopsRef = useRef(hoverHighlightHops);
   const adjacencyMapRef = useRef<Map<string, string[]>>(new Map());
@@ -249,6 +257,7 @@ function NetworkGraph3DInner(
   selectedNodeIdRef.current = selectedNodeId;
   labelFormatterRef.current = labelFormatter;
   clickToFocusRef.current = clickToFocus;
+  enableNodeDragRef.current = enableNodeDrag;
   hoverHighlightRef.current = hoverHighlight;
   hoverHighlightHopsRef.current = hoverHighlightHops;
 
@@ -439,6 +448,7 @@ function NetworkGraph3DInner(
       {
         getClickToFocus: () => clickToFocusRef.current,
         getIs2D: () => is2DRef.current,
+        getNodeDragEnabled: () => enableNodeDragRef.current,
       }
     );
 
