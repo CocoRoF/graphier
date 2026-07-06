@@ -47,6 +47,7 @@ import {
   initBloom,
   startAnimationLoop,
   setupResize,
+  applyCameraMode2D,
   type SceneState,
 } from "./scene-setup";
 import { createNodeMesh, computeNodeScales, updateNodePositions } from "./node-mesh";
@@ -106,6 +107,19 @@ export interface NetworkGraph3DProps {
   labelFormatter?: (node: GraphNode) => string;
   /** Custom node size accessor (overrides node.val) */
   nodeValueAccessor?: (node: GraphNode) => number;
+  /**
+   * Client-side filter: IDs of nodes to keep visible. Hidden nodes (and
+   * their edges/labels) vanish WITHOUT re-running the force layout —
+   * positions are preserved, so toggling filters never reheats the graph.
+   * null/undefined shows everything.
+   */
+  visibleNodeIds?: ReadonlySet<string> | string[] | null;
+  /** Fly the camera to a node on single-click (default: true) */
+  clickToFocus?: boolean;
+  /** Highlight a node's neighborhood on hover when nothing is selected (default: false) */
+  hoverHighlight?: boolean;
+  /** Hops highlighted around the hovered node (default: 1) */
+  hoverHighlightHops?: number;
 }
 
 /** Internal data state shared across effects */
@@ -153,6 +167,10 @@ function NetworkGraph3DInner(
     renderer: rendererProp,
     labelFormatter,
     nodeValueAccessor,
+    visibleNodeIds,
+    clickToFocus = true,
+    hoverHighlight = false,
+    hoverHighlightHops = 1,
   } = props;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -202,6 +220,13 @@ function NetworkGraph3DInner(
   const selectedNodeIdRef = useRef(selectedNodeId);
   const labelFormatterRef = useRef(labelFormatter);
   const highlightSetRef = useRef<Map<string, number> | null>(null);
+  const clickToFocusRef = useRef(clickToFocus);
+  const hoverHighlightRef = useRef(hoverHighlight);
+  const hoverHighlightHopsRef = useRef(hoverHighlightHops);
+  const adjacencyMapRef = useRef<Map<string, string[]>>(new Map());
+  const is2DRef = useRef(false);
+  const hiddenNodesRef = useRef<Uint8Array | null>(null);
+  const hiddenEdgesRef = useRef<Uint8Array | null>(null);
   onNodeClickRef.current = onNodeClick;
   onNodeDoubleClickRef.current = onNodeDoubleClick;
   onNodeHoverRef.current = onNodeHover;
@@ -216,6 +241,12 @@ function NetworkGraph3DInner(
   themeRef.current = resolvedTheme;
   selectedNodeIdRef.current = selectedNodeId;
   labelFormatterRef.current = labelFormatter;
+  clickToFocusRef.current = clickToFocus;
+  hoverHighlightRef.current = hoverHighlight;
+  hoverHighlightHopsRef.current = hoverHighlightHops;
+
+  const is2D = layoutProp?.dimensions === 2;
+  is2DRef.current = is2D;
 
   /* ── Merge external data with appended data ── */
   const mergedData: GraphData = useMemo(() => {
@@ -246,6 +277,15 @@ function NetworkGraph3DInner(
     () => buildAdjacencyMapFromLinks(mergedData.links),
     [mergedData.links]
   );
+  adjacencyMapRef.current = adjacencyMap;
+
+  /* ── Normalized visibility set (null = all visible) ── */
+  const visibleSet = useMemo<ReadonlySet<string> | null>(() => {
+    if (visibleNodeIds == null) return null;
+    return visibleNodeIds instanceof Set
+      ? (visibleNodeIds as ReadonlySet<string>)
+      : new Set(visibleNodeIds as string[]);
+  }, [visibleNodeIds]);
 
   /* ── Highlight set ── */
   const highlightSet = useMemo(() => {
@@ -263,6 +303,36 @@ function NetworkGraph3DInner(
     }
     return { min: isFinite(min) ? min : 1, max: isFinite(max) ? max : 1 };
   }, [mergedData.nodes, nodeValueAccessor]);
+
+  /* ── Hover highlight (imperative — no React re-render per mousemove) ── */
+  const applyHoverHighlight = (node: GraphNode | null) => {
+    if (!hoverHighlightRef.current) return;
+    if (selectedNodeIdRef.current) return; // explicit selection wins
+    const gObj = graphObjRef.current;
+    if (!gObj) return;
+    const d = dataRef.current;
+    const set = node
+      ? computeHighlightSet(
+          node.id,
+          adjacencyMapRef.current,
+          hoverHighlightHopsRef.current
+        )
+      : null;
+    highlightSetRef.current = set;
+    applyNodeHighlight(gObj.nodesMesh, d.nodes, node?.id ?? null, set, themeRef.current);
+    applyEdgeHighlight(
+      gObj.edgesMesh,
+      d.links,
+      d.edgeNodeIndices,
+      d.edgeLinkIndices,
+      set,
+      styleRef.current.edgeOpacity,
+      d.nodes.length,
+      themeRef.current
+    );
+  };
+  const applyHoverHighlightRef = useRef(applyHoverHighlight);
+  applyHoverHighlightRef.current = applyHoverHighlight;
 
   /* ── Effect 1: Scene setup (mount once) ── */
   useEffect(() => {
@@ -291,7 +361,8 @@ function NetworkGraph3DInner(
         styleRef.current.labelThreshold,
         styleRef.current.maxLabels,
         labelFormatterRef.current,
-        highlightSetRef.current
+        highlightSetRef.current,
+        hiddenNodesRef.current
       );
     });
 
@@ -307,11 +378,15 @@ function NetworkGraph3DInner(
       {
         onNodeClick: (node) => onNodeClickRef.current?.(node),
         onNodeDoubleClick: (node) => onNodeDoubleClickRef.current?.(node),
-        onNodeHover: (node) => onNodeHoverRef.current?.(node),
+        onNodeHover: (node) => {
+          onNodeHoverRef.current?.(node);
+          applyHoverHighlightRef.current(node);
+        },
         onContextMenu: (node, pos) => onContextMenuRef.current?.(node, pos),
         onLinkClick: (link) => onLinkClickRef.current?.(link),
         onLinkHover: (link) => onLinkHoverRef.current?.(link),
         onNodeDrag: (node, pos) => {
+          if (is2DRef.current) pos = { ...pos, z: 0 };
           onNodeDragRef.current?.(node, pos);
           // Update position in data
           const d = dataRef.current;
@@ -326,7 +401,13 @@ function NetworkGraph3DInner(
             // Update node mesh position
             const gObj = graphObjRef.current;
             if (gObj && d.scales) {
-              updateNodePositions(gObj.nodesMesh, d.positions!, d.scales, d.nodes.length);
+              updateNodePositions(
+                gObj.nodesMesh,
+                d.positions!,
+                d.scales,
+                d.nodes.length,
+                hiddenNodesRef.current
+              );
             }
           }
         },
@@ -341,6 +422,10 @@ function NetworkGraph3DInner(
           edgeLinkIndices: d.edgeLinkIndices,
           positions: d.positions,
         };
+      },
+      {
+        getClickToFocus: () => clickToFocusRef.current,
+        getIs2D: () => is2DRef.current,
       }
     );
 
@@ -521,8 +606,15 @@ function NetworkGraph3DInner(
         const positions = new Float32Array(msg.positions);
         dataRef.current.positions = positions;
 
-        // Update node positions
-        updateNodePositions(nodesMesh, positions, scales, nc);
+        // Update node positions (respecting any active visibility filter)
+        const hn = hiddenNodesRef.current;
+        updateNodePositions(
+          nodesMesh,
+          positions,
+          scales,
+          nc,
+          hn && hn.length === nc ? hn : null
+        );
 
         // Mutate node objects for focusNode compatibility
         for (let i = 0; i < nc; i++) {
@@ -531,12 +623,14 @@ function NetworkGraph3DInner(
           (nodes[i] as any).z = positions[i * 3 + 2];
         }
 
-        // Update edges
+        // Update edges (respecting any active visibility filter)
+        const he = hiddenEdgesRef.current;
         updateEdgePositions(
           edgeResult.positionArray,
           positions,
           edgeNodeIndices,
-          edgeResult.geometry
+          edgeResult.geometry,
+          he && he.length === edgeNodeIndices.length ? he : null
         );
 
         // Keep selection ring synced during layout
@@ -564,6 +658,22 @@ function NetworkGraph3DInner(
 
     // Send layout params with preserved positions for existing nodes
     const layoutParams = resolveLayoutParams(nc, layoutProp);
+
+    // Optional cluster force: map each node's cluster key to a group index
+    let groups: number[] | undefined;
+    if (layoutProp?.clusterBy) {
+      const keyOf = (n: GraphNode) =>
+        layoutProp.clusterBy === "type" ? n.type : (n as any).group;
+      const keyToIdx = new Map<string, number>();
+      groups = nodes.map((n) => {
+        const k = keyOf(n);
+        if (k == null) return -1;
+        const ks = String(k);
+        if (!keyToIdx.has(ks)) keyToIdx.set(ks, keyToIdx.size);
+        return keyToIdx.get(ks)!;
+      });
+    }
+
     worker.postMessage({
       type: "init",
       nodes: nodes.map((n) => ({ id: n.id })),
@@ -573,6 +683,7 @@ function NetworkGraph3DInner(
       })),
       params: layoutParams,
       initialPositions: preservedPositionsRef.current,
+      groups,
     });
 
     return () => {
@@ -601,6 +712,54 @@ function NetworkGraph3DInner(
       graphObjRef.current = null;
     };
   }, [mergedData, valRange, nodeValueAccessor, layoutProp]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Effect 2b: Visibility filter (never reheats the layout) ── */
+  useEffect(() => {
+    const d = dataRef.current;
+    const gObj = graphObjRef.current;
+    if (!visibleSet) {
+      hiddenNodesRef.current = null;
+      hiddenEdgesRef.current = null;
+    } else {
+      const nc = d.nodes.length;
+      const hn = new Uint8Array(nc);
+      for (let i = 0; i < nc; i++) {
+        if (!visibleSet.has(d.nodes[i].id)) hn[i] = 1;
+      }
+      const ec = d.edgeNodeIndices.length;
+      const he = new Uint8Array(ec);
+      for (let i = 0; i < ec; i++) {
+        const [si, ti] = d.edgeNodeIndices[i];
+        if (hn[si] || hn[ti]) he[i] = 1;
+      }
+      hiddenNodesRef.current = hn;
+      hiddenEdgesRef.current = he;
+    }
+    // Apply immediately when positions exist; otherwise the first worker
+    // tick picks the masks up. Pure matrix/buffer writes — no simulation.
+    if (gObj && d.positions && d.scales) {
+      updateNodePositions(
+        gObj.nodesMesh,
+        d.positions,
+        d.scales,
+        d.nodes.length,
+        hiddenNodesRef.current
+      );
+      updateEdgePositions(
+        gObj.edgePositionArray,
+        d.positions,
+        d.edgeNodeIndices,
+        gObj.edgeGeometry,
+        hiddenEdgesRef.current
+      );
+    }
+  }, [visibleSet, mergedData]);
+
+  /* ── Effect 2c: 2D/3D camera mode ── */
+  useEffect(() => {
+    const s = sceneRef.current;
+    if (s) applyCameraMode2D(s, is2D);
+  }, [is2D]);
 
   /* ── Effect 3: Selection visual update ── */
   useEffect(() => {
@@ -686,7 +845,7 @@ function NetworkGraph3DInner(
       resolvedStyle.nodeMaxSize
     );
     dataRef.current.scales = newScales;
-    updateNodePositions(gObj.nodesMesh, positions, newScales, nc);
+    updateNodePositions(gObj.nodesMesh, positions, newScales, nc, hiddenNodesRef.current);
   }, [resolvedStyle.nodeMinSize, resolvedStyle.nodeMaxSize, valRange]);
 
   // Edge opacity & width live update
@@ -789,6 +948,18 @@ function NetworkGraph3DInner(
       const nx = d.positions[idx * 3];
       const ny = d.positions[idx * 3 + 1];
       const nz = d.positions[idx * 3 + 2];
+      if (is2DRef.current) {
+        // Pan to the node, zooming to a readable level
+        const z = Math.max(120, Math.min(Math.abs(s.camera.position.z), 500));
+        animateCamera(
+          s.camera,
+          s.controls,
+          { x: nx, y: ny, z },
+          { x: nx, y: ny, z: 0 },
+          duration
+        );
+        return;
+      }
       const dist = Math.hypot(nx, ny, nz);
       if (dist < 1) return;
       const ratio = 1 + 120 / dist;
@@ -799,6 +970,34 @@ function NetworkGraph3DInner(
         { x: nx, y: ny, z: nz },
         duration
       );
+    },
+    panTo(x: number, y: number, duration = 600) {
+      const s = sceneRef.current;
+      if (!s) return;
+      const t = s.controls.target as THREE.Vector3;
+      if (is2DRef.current) {
+        animateCamera(
+          s.camera,
+          s.controls,
+          { x, y, z: s.camera.position.z },
+          { x, y, z: 0 },
+          duration
+        );
+      } else {
+        const dx = x - t.x;
+        const dy = y - t.y;
+        animateCamera(
+          s.camera,
+          s.controls,
+          {
+            x: s.camera.position.x + dx,
+            y: s.camera.position.y + dy,
+            z: s.camera.position.z,
+          },
+          { x, y, z: t.z },
+          duration
+        );
+      }
     },
     appendData(newNodes: GraphNode[], newLinks: GraphLink[]) {
       if (newNodes.length === 0 && newLinks.length === 0) return 0;
@@ -829,6 +1028,35 @@ function NetworkGraph3DInner(
       if (!s) return null;
       s.renderer.render(s.scene, s.camera);
       return s.renderer.domElement.toDataURL("image/png");
+    },
+    getGraphSnapshot() {
+      const gObj = graphObjRef.current;
+      const d = dataRef.current;
+      if (!gObj || !d.positions) return null;
+      return {
+        positions: d.positions,
+        count: d.nodes.length,
+        colors: (gObj.nodesMesh.instanceColor?.array as Float32Array) ?? null,
+        hidden: hiddenNodesRef.current,
+        selectedIndex: selectedNodeIdRef.current
+          ? d.nodeIdToIndex.get(selectedNodeIdRef.current) ?? -1
+          : -1,
+      };
+    },
+    getViewportRect() {
+      const s = sceneRef.current;
+      if (!s) return null;
+      const cam = s.camera;
+      // Frustum footprint on the z=0 plane (exact for the axis-aligned
+      // 2D camera; an approximation when the 3D camera is tilted).
+      const dist = Math.abs(cam.position.z);
+      const halfH = Math.tan((cam.fov * Math.PI) / 360) * dist;
+      return {
+        cx: cam.position.x,
+        cy: cam.position.y,
+        halfW: halfH * cam.aspect,
+        halfH,
+      };
     },
     reheatLayout() {
       // Force re-run of layout by resetting settled state

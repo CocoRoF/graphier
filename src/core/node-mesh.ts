@@ -168,7 +168,8 @@ export function updateNodePositions(
   mesh: THREE.InstancedMesh,
   positions: Float32Array,
   scales: Float32Array,
-  nodeCount: number
+  nodeCount: number,
+  hidden?: Uint8Array | null
 ): void {
   const pos = new THREE.Vector3();
   const scale = new THREE.Vector3();
@@ -177,7 +178,10 @@ export function updateNodePositions(
 
   for (let i = 0; i < nodeCount; i++) {
     pos.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
-    const sc = scales[i];
+    // Hidden nodes collapse to near-zero scale: invisible, un-raycastable,
+    // but the instance stays allocated so indices never shift and the
+    // layout keeps running — showing them again is just a matrix update.
+    const sc = hidden && hidden[i] ? 1e-4 : scales[i];
     scale.set(sc, sc, sc);
     mat.compose(pos, quat, scale);
     mesh.setMatrixAt(i, mat);

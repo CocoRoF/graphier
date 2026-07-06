@@ -18,6 +18,28 @@ export interface RendererConfig {
   cameraMode?: "fly" | "orbit";
 }
 
+/** Raw per-frame node buffers for lightweight overlays (e.g. minimap) */
+export interface GraphSnapshot {
+  /** xyz triplets, one per node (live buffer — do not mutate) */
+  positions: Float32Array;
+  /** Node count */
+  count: number;
+  /** rgb triplets per node from the instanced mesh (live buffer) */
+  colors: Float32Array | null;
+  /** 1 = hidden by the visibility filter (live buffer) */
+  hidden: Uint8Array | null;
+  /** Index of the selected node, -1 if none */
+  selectedIndex: number;
+}
+
+/** Camera frustum footprint on the z=0 plane (world units) */
+export interface ViewportRect {
+  cx: number;
+  cy: number;
+  halfW: number;
+  halfH: number;
+}
+
 export interface NetworkGraph3DRef {
   /** Animate camera to position, looking at target */
   cameraPosition(
@@ -49,4 +71,10 @@ export interface NetworkGraph3DRef {
   captureScreenshot(): string | null;
   /** Re-run force layout from current positions (useful after changing spreadFactor) */
   reheatLayout(): void;
+  /** Pan the camera to world (x, y), keeping the current zoom (2D-friendly) */
+  panTo(x: number, y: number, duration?: number): void;
+  /** Node position/color/visibility buffers for overlays like GraphMinimap */
+  getGraphSnapshot(): GraphSnapshot | null;
+  /** Current camera footprint on the z=0 plane (meaningful in 2D mode) */
+  getViewportRect(): ViewportRect | null;
 }

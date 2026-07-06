@@ -56,6 +56,7 @@ export function applyNodeHighlight(
   const nc = nodes.length;
   const tmpColor = new THREE.Color();
   const brightTmp = new THREE.Color();
+  const bgColor = new THREE.Color(theme.backgroundColor);
 
   for (let i = 0; i < nc; i++) {
     const node = nodes[i];
@@ -66,15 +67,21 @@ export function applyNodeHighlight(
       // Normal state
       tmpColor.set(baseColor);
     } else if (node.id === selectedNodeId) {
-      // Selected — near-white HDR glow (exceeds 1.0 for bloom pickup)
-      tmpColor.set(brightColor);
-      brightTmp.setRGB(1, 1, 1);
-      tmpColor.lerp(brightTmp, 0.65);
-      tmpColor.multiplyScalar(1.4); // HDR overshoot for bloom magnet
-      // Clamp to 2.0 to prevent over-saturation (match original)
-      tmpColor.r = Math.min(tmpColor.r, 2.0);
-      tmpColor.g = Math.min(tmpColor.g, 2.0);
-      tmpColor.b = Math.min(tmpColor.b, 2.0);
+      if (theme.isLight) {
+        // Light background: whitening would erase the node — use the
+        // saturated bright variant instead (ring carries the emphasis).
+        tmpColor.set(brightColor);
+      } else {
+        // Selected — near-white HDR glow (exceeds 1.0 for bloom pickup)
+        tmpColor.set(brightColor);
+        brightTmp.setRGB(1, 1, 1);
+        tmpColor.lerp(brightTmp, 0.65);
+        tmpColor.multiplyScalar(1.4); // HDR overshoot for bloom magnet
+        // Clamp to 2.0 to prevent over-saturation (match original)
+        tmpColor.r = Math.min(tmpColor.r, 2.0);
+        tmpColor.g = Math.min(tmpColor.g, 2.0);
+        tmpColor.b = Math.min(tmpColor.b, 2.0);
+      }
     } else if (highlightSet.has(node.id)) {
       const hop = highlightSet.get(node.id)!;
       if (hop === 1) {
@@ -86,6 +93,9 @@ export function applyNodeHighlight(
       } else {
         tmpColor.set(baseColor).multiplyScalar(0.6);
       }
+    } else if (theme.isLight) {
+      // Heavily dimmed — fade toward the light background
+      tmpColor.set(baseColor).lerp(bgColor, 0.88);
     } else {
       // Heavily dimmed — nearly invisible
       tmpColor.set(baseColor).multiplyScalar(0.04);
@@ -119,6 +129,7 @@ export function applyEdgeHighlight(
   const colorArr = colorAttr.array as Float32Array;
   const validCount = edgeNodeIndices.length;
   const tmpColor = new THREE.Color();
+  const bgColor = new THREE.Color(theme.backgroundColor);
 
   for (let i = 0; i < validCount; i++) {
     const origIdx = edgeLinkIndices[i];
@@ -134,13 +145,19 @@ export function applyEdgeHighlight(
       const maxHopVal = Math.max(highlightSet.get(sId)!, highlightSet.get(tId)!);
       tmpColor.set(theme.linkColor(link?.type));
       if (maxHopVal <= 1) {
-        tmpColor.multiplyScalar(1.8);
-        tmpColor.r = Math.min(tmpColor.r, 1);
-        tmpColor.g = Math.min(tmpColor.g, 1);
-        tmpColor.b = Math.min(tmpColor.b, 1);
+        if (theme.isLight) {
+          tmpColor.multiplyScalar(0.55);
+        } else {
+          tmpColor.multiplyScalar(1.8);
+          tmpColor.r = Math.min(tmpColor.r, 1);
+          tmpColor.g = Math.min(tmpColor.g, 1);
+          tmpColor.b = Math.min(tmpColor.b, 1);
+        }
       } else if (maxHopVal === 2) {
-        tmpColor.multiplyScalar(1.2);
+        tmpColor.multiplyScalar(theme.isLight ? 0.8 : 1.2);
       }
+    } else if (theme.isLight) {
+      tmpColor.set(theme.linkColor(link?.type)).lerp(bgColor, 0.85);
     } else {
       tmpColor.setRGB(0.01, 0.01, 0.02);
     }

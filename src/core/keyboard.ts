@@ -28,6 +28,8 @@ export interface KeyboardControlState {
   cleanup: () => void;
   /** Update the fly speed multiplier at runtime */
   setFlySpeed: (speed: number) => void;
+  /** Enable/disable keyboard camera control (disabled in 2D mode) */
+  setEnabled: (enabled: boolean) => void;
 }
 
 /* ── Orbit mode constants (constant speed, no acceleration) ── */
@@ -192,9 +194,11 @@ export function setupKeyboardControls(
   container.addEventListener("keyup", onKeyUp);
   container.addEventListener("blur", onBlur);
 
-  const updateFn = mode === "fly"
+  let enabled = true;
+  const innerUpdate = mode === "fly"
     ? createFlyUpdate(camera, controls, keys, state)
     : createOrbitUpdate(camera, controls, keys);
+  const updateFn = () => (enabled ? innerUpdate() : false);
 
   function cleanup() {
     container.removeEventListener("keydown", onKeyDown);
@@ -206,5 +210,10 @@ export function setupKeyboardControls(
     state.flySpeed = speed;
   }
 
-  return { update: updateFn, cleanup, setFlySpeed };
+  function setEnabled(on: boolean) {
+    enabled = on;
+    if (!on) for (const k of Object.keys(keys)) keys[k] = false;
+  }
+
+  return { update: updateFn, cleanup, setFlySpeed, setEnabled };
 }

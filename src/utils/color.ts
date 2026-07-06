@@ -16,6 +16,18 @@ export function rgbToHex(r: number, g: number, b: number): string {
   return "#" + hex.toString(16).padStart(6, "0");
 }
 
+/** Relative luminance 0..1 of a hex color (for light/dark detection) */
+export function luminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Darken a hex color by a factor (0.7 = 30% darker) */
+export function darken(hex: string, factor: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return rgbToHex(r * factor, g * factor, b * factor);
+}
+
 /** Brighten a hex color by a factor (1.0 = no change, 1.5 = 50% brighter) */
 export function brighten(hex: string, factor: number): string {
   const [r, g, b] = hexToRgb(hex);

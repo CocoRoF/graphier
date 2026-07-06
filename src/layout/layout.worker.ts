@@ -23,6 +23,8 @@ interface SimNode {
 }
 
 interface LayoutParams {
+  dimensions: 2 | 3;
+  clusterStrength: number;
   charge: number;
   distanceMax: number;
   theta: number;
@@ -54,17 +56,34 @@ self.onmessage = (e: MessageEvent) => {
     const initPos: Record<string, { x: number; y: number; z: number }> =
       msg.initialPositions ?? {};
 
+    const dims: 2 | 3 = params.dimensions === 2 ? 2 : 3;
+
     simNodes = msg.nodes.map(
       (nd: { id: string }, i: number): SimNode => {
-        // Use preserved position if available, otherwise random sphere
+        // Use preserved position if available, otherwise random placement
         const prev = initPos[nd.id];
         if (prev) {
-          return { id: nd.id, index: i, x: prev.x, y: prev.y, z: prev.z };
+          return {
+            id: nd.id,
+            index: i,
+            x: prev.x,
+            y: prev.y,
+            z: dims === 2 ? 0 : prev.z,
+          };
         }
-        // New node: place near a connected neighbor if possible
         const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
         const r = params.initialRadius * (0.5 + Math.random() * 0.5);
+        if (dims === 2) {
+          // Flat disc — z locked to the plane
+          return {
+            id: nd.id,
+            index: i,
+            x: r * Math.cos(theta),
+            y: r * Math.sin(theta),
+            z: 0,
+          };
+        }
+        const phi = Math.acos(2 * Math.random() - 1);
         return {
           id: nd.id,
           index: i,
@@ -80,7 +99,7 @@ self.onmessage = (e: MessageEvent) => {
       target: l.target,
     }));
 
-    sim = forceSimulation(simNodes, 3)
+    sim = forceSimulation(simNodes, dims)
       .force(
         "charge",
         forceManyBody()
@@ -99,6 +118,37 @@ self.onmessage = (e: MessageEvent) => {
       .alphaDecay(params.alphaDecay)
       .velocityDecay(params.velocityDecay);
 
+    // Optional cluster force: pull nodes of the same group toward their
+    // group centroid so categories form visible clusters (Obsidian look).
+    // msg.groups: per-node group index (-1 = ungrouped), aligned with nodes.
+    const groups: number[] | undefined = msg.groups;
+    if (groups && groups.length === simNodes.length && params.clusterStrength > 0) {
+      const k = params.clusterStrength;
+      sim.force("cluster", (alpha: number) => {
+        const cx: Record<number, number> = {};
+        const cy: Record<number, number> = {};
+        const cz: Record<number, number> = {};
+        const cn: Record<number, number> = {};
+        for (let i = 0; i < simNodes.length; i++) {
+          const g = groups[i];
+          if (g < 0) continue;
+          cx[g] = (cx[g] ?? 0) + simNodes[i].x;
+          cy[g] = (cy[g] ?? 0) + simNodes[i].y;
+          cz[g] = (cz[g] ?? 0) + (simNodes[i].z || 0);
+          cn[g] = (cn[g] ?? 0) + 1;
+        }
+        const pull = k * alpha;
+        for (let i = 0; i < simNodes.length; i++) {
+          const g = groups[i];
+          if (g < 0 || !cn[g]) continue;
+          const n = simNodes[i] as SimNode & { vx: number; vy: number; vz: number };
+          n.vx = (n.vx || 0) + (cx[g] / cn[g] - n.x) * pull;
+          n.vy = (n.vy || 0) + (cy[g] / cn[g] - n.y) * pull;
+          if (dims === 3) n.vz = (n.vz || 0) + (cz[g] / cn[g] - n.z) * pull;
+        }
+      });
+    }
+
     sim.on("tick", () => {
       tickCount++;
 
@@ -110,7 +160,7 @@ self.onmessage = (e: MessageEvent) => {
       for (let i = 0; i < n; i++) {
         positions[i * 3] = simNodes[i].x || 0;
         positions[i * 3 + 1] = simNodes[i].y || 0;
-        positions[i * 3 + 2] = simNodes[i].z || 0;
+        positions[i * 3 + 2] = dims === 2 ? 0 : simNodes[i].z || 0;
       }
 
       self.postMessage(

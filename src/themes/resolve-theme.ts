@@ -4,22 +4,28 @@
  */
 
 import type { ThemeConfig } from "../types";
-import { brighten, DEFAULT_PALETTE } from "../utils/color";
+import { brighten, darken, luminance, DEFAULT_PALETTE } from "../utils/color";
 import { celestial } from "./celestial";
 import { neon } from "./neon";
 import { minimal } from "./minimal";
+import { paper } from "./paper";
 
 export interface ResolvedTheme {
   nodeColor(type?: string): string;
   nodeColorBright(type?: string): string;
   linkColor(type?: string): string;
   backgroundColor: string;
+  /** True when the background is light — flips highlight/dim direction */
+  isLight: boolean;
+  /** Whether edges should use additive blending (dark backgrounds only) */
+  additiveEdges: boolean;
 }
 
 const PRESETS: Record<string, ThemeConfig> = {
   celestial,
   neon,
   minimal,
+  paper,
 };
 
 const DEFAULT_THEME = {
@@ -55,6 +61,10 @@ export function resolveTheme(
   const backgroundColor =
     config.backgroundColor ?? DEFAULT_THEME.backgroundColor;
   const palette = config.palette ?? DEFAULT_THEME.palette;
+  const isLight = luminance(backgroundColor) > 0.5;
+  const additiveEdges = config.blending
+    ? config.blending === "additive"
+    : !isLight;
 
   // Track auto-assigned colors for unmapped types
   const autoAssigned = new Map<string, number>();
@@ -70,10 +80,14 @@ export function resolveTheme(
     return palette[autoAssigned.get(type)!];
   }
 
+  // On light backgrounds "bright" must darken/saturate — whitened
+  // colors wash out against white (labels, hop-1 highlight, ring).
+  const emphasize = (c: string) => (isLight ? darken(c, 0.72) : brighten(c, 1.5));
+
   function nodeColorBright(type?: string): string {
-    if (!type) return brighten(defaultNodeColor, 1.5);
+    if (!type) return emphasize(defaultNodeColor);
     if (nodeColorsBright[type]) return nodeColorsBright[type];
-    return brighten(nodeColor(type), 1.5);
+    return emphasize(nodeColor(type));
   }
 
   function linkColor(type?: string): string {
@@ -81,5 +95,12 @@ export function resolveTheme(
     return linkColors[type] ?? defaultLinkColor;
   }
 
-  return { nodeColor, nodeColorBright, linkColor, backgroundColor };
+  return {
+    nodeColor,
+    nodeColorBright,
+    linkColor,
+    backgroundColor,
+    isLight,
+    additiveEdges,
+  };
 }

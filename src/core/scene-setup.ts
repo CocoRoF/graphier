@@ -27,6 +27,8 @@ export interface SceneState {
   bloomPass: UnrealBloomPass | null;
   keyboard: KeyboardControlState;
   scrollCleanup: () => void;
+  /** Mutable runtime flags shared with input handlers */
+  flags: { is2D: boolean };
 }
 
 export function createScene(
@@ -88,9 +90,12 @@ export function createScene(
 
   // Custom scroll handler: linear zoom without acceleration/inertia.
   // Moves camera + target along look direction, proportional to scroll delta.
+  // In 2D mode OrbitControls handles wheel + pinch itself (enableZoom).
   controls.enableZoom = false;
+  const flags = { is2D: false };
   const _wheelDir = new THREE.Vector3();
   const onWheel = (e: WheelEvent) => {
+    if (flags.is2D) return;
     e.preventDefault();
     let delta = -e.deltaY;
     if (e.deltaMode === 1) delta *= 40;   // line → pixels
@@ -116,7 +121,46 @@ export function createScene(
     bloomPass: null,
     keyboard,
     scrollCleanup,
+    flags,
   };
+}
+
+/**
+ * Switch camera controls between 3D orbit/fly and flat 2D pan/zoom.
+ * In 2D: rotation off, left-drag pans in screen space, wheel/pinch dollies
+ * via OrbitControls, keyboard flight disabled, camera snaps to face the
+ * z=0 plane head-on.
+ */
+export function applyCameraMode2D(state: SceneState, is2D: boolean): void {
+  const { controls, camera, keyboard } = state;
+  state.flags.is2D = is2D;
+  controls.enableRotate = !is2D;
+  controls.enableZoom = is2D;
+  controls.screenSpacePanning = is2D;
+  keyboard.setEnabled(!is2D);
+  if (is2D) {
+    controls.mouseButtons = {
+      LEFT: THREE.MOUSE.PAN,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.PAN,
+    };
+    controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+    // Snap to a head-on view of the plane, keeping the current distance
+    const t = controls.target as THREE.Vector3;
+    const dist = Math.max(camera.position.distanceTo(t), 50);
+    t.z = 0;
+    camera.up.set(0, 1, 0);
+    camera.position.set(t.x, t.y, dist);
+    camera.lookAt(t);
+  } else {
+    controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.PAN,
+    };
+    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+  }
+  controls.update();
 }
 
 /** Initialize bloom post-processing */

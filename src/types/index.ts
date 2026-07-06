@@ -19,4 +19,9 @@ export type {
   LayoutSettledHandler,
   LayoutTickHandler,
 } from "./events";
-export type { RendererConfig, NetworkGraph3DRef } from "./renderer";
+export type {
+  RendererConfig,
+  NetworkGraph3DRef,
+  GraphSnapshot,
+  ViewportRect,
+} from "./renderer";

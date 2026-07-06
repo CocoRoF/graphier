@@ -17,6 +17,12 @@ export interface ThemeConfig {
   backgroundColor?: string;
   /** Color palette for auto-assignment when type has no explicit mapping */
   palette?: string[];
+  /**
+   * Edge blend mode. "additive" glows on dark backgrounds; "normal" is
+   * required for light backgrounds (additive lines vanish on white).
+   * Default: "additive" on dark backgrounds, "normal" on light ones.
+   */
+  blending?: "additive" | "normal";
 }
 
 export interface StyleConfig {

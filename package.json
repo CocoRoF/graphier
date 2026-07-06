@@ -1,6 +1,6 @@
 {
   "name": "@cocorof/graphier",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "High-performance 3D/2D graph renderer for React — powered by Three.js and d3-force-3d",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -26,7 +26,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "node scripts/build-worker.js && tsc --noEmit && vite build",
     "build:fast": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"

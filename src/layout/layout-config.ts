@@ -6,6 +6,8 @@
 import type { LayoutConfig } from "../types";
 
 export interface ResolvedLayoutParams {
+  dimensions: 2 | 3;
+  clusterStrength: number;
   charge: number;
   distanceMax: number;
   theta: number;
@@ -86,6 +88,8 @@ export function resolveLayoutParams(
   const initialRadius = (500 + Math.min(n, 10000) * 0.1) * spread;
 
   return {
+    dimensions: config?.dimensions === 2 ? 2 : 3,
+    clusterStrength: config?.clusterStrength ?? 0.05,
     charge,
     distanceMax,
     theta,

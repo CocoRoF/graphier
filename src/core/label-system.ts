@@ -114,7 +114,8 @@ export function updateLabels(
   labelThreshold: number,
   maxLabels: number,
   labelFormatter?: (node: GraphNode) => string,
-  highlightSet?: Map<string, number> | null
+  highlightSet?: Map<string, number> | null,
+  hidden?: Uint8Array | null
 ): void {
   if (
     !positions ||
@@ -138,6 +139,8 @@ export function updateLabels(
   // When a highlight set is active, only consider highlighted nodes
   const candidates: { idx: number; distSq: number; val: number }[] = [];
   for (let i = 0; i < nc; i++) {
+    // Skip hidden (filtered-out) nodes
+    if (hidden && hidden[i]) continue;
     // Skip non-highlighted nodes when selection is active
     if (highlightSet && !highlightSet.has(nodes[i].id)) continue;
 

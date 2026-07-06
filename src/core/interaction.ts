@@ -18,6 +18,13 @@ export interface InteractionCallbacks {
   onNodeDragEnd?: (node: GraphNode, position: { x: number; y: number; z: number }) => void;
 }
 
+export interface InteractionOptions {
+  /** When false, single-click selects without flying the camera */
+  getClickToFocus?: () => boolean;
+  /** 2D mode: click-focus pans in-plane instead of orbit-framing */
+  getIs2D?: () => boolean;
+}
+
 export interface InteractionState {
   cleanup: () => void;
 }
@@ -44,7 +51,8 @@ export function setupInteraction(
     edgeNodeIndices: [number, number][];
     edgeLinkIndices: number[];
     positions: Float32Array | null;
-  } | null
+  } | null,
+  options?: InteractionOptions
 ): InteractionState {
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -229,20 +237,33 @@ export function setupInteraction(
 
       singleClickTimer = setTimeout(() => {
         singleClickTimer = null;
-        // Animate camera toward node
-        const nx = (node as any).x ?? 0;
-        const ny = (node as any).y ?? 0;
-        const nz = (node as any).z ?? 0;
-        const dist = Math.hypot(nx, ny, nz);
-        if (dist > 1) {
-          const ratio = 1 + 120 / dist;
-          animateCamera(
-            camera,
-            controls,
-            { x: nx * ratio, y: ny * ratio, z: nz * ratio },
-            { x: nx, y: ny, z: nz },
-            1200
-          );
+        const clickToFocus = options?.getClickToFocus?.() ?? true;
+        if (clickToFocus) {
+          const nx = (node as any).x ?? 0;
+          const ny = (node as any).y ?? 0;
+          const nz = (node as any).z ?? 0;
+          if (options?.getIs2D?.()) {
+            // 2D: pan in-plane to the node, keep the current zoom level
+            animateCamera(
+              camera,
+              controls,
+              { x: nx, y: ny, z: camera.position.z },
+              { x: nx, y: ny, z: 0 },
+              800
+            );
+          } else {
+            const dist = Math.hypot(nx, ny, nz);
+            if (dist > 1) {
+              const ratio = 1 + 120 / dist;
+              animateCamera(
+                camera,
+                controls,
+                { x: nx * ratio, y: ny * ratio, z: nz * ratio },
+                { x: nx, y: ny, z: nz },
+                1200
+              );
+            }
+          }
         }
         callbacks.onNodeClick(node);
       }, 250);

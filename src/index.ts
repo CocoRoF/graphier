@@ -16,6 +16,10 @@
 export { NetworkGraph3D } from "./core/NetworkGraph3D";
 export type { NetworkGraph3DProps } from "./core/NetworkGraph3D";
 
+// ── Minimap Overlay ──
+export { GraphMinimap } from "./core/Minimap";
+export type { GraphMinimapProps } from "./core/Minimap";
+
 // ── 2D Subgraph Component ──
 export { SubgraphView2D } from "./subgraph/SubgraphView2D";
 export type { SubgraphView2DProps } from "./subgraph/SubgraphView2D";
@@ -39,6 +43,8 @@ export type {
   LayoutConfig,
   RendererConfig,
   NetworkGraph3DRef,
+  GraphSnapshot,
+  ViewportRect,
   NodeEventHandler,
   NullableNodeEventHandler,
   LinkEventHandler,
@@ -53,7 +59,7 @@ export { DEFAULT_STYLE } from "./types/theme";
 export { DEFAULT_LAYOUT } from "./types/layout";
 
 // ── Themes ──
-export { celestial, neon, minimal, resolveTheme } from "./themes";
+export { celestial, neon, minimal, paper, resolveTheme } from "./themes";
 export type { ResolvedTheme } from "./themes";
 
 // ── Camera utilities (for external use) ──

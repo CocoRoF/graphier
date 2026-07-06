@@ -21,6 +21,31 @@ High-performance 3D/2D graph renderer for React — powered by Three.js and d3-f
 - **TypeScript** — Full type safety with exported types
 - **Dual ESM/CJS** — Works in all bundler configurations
 
+## 2D Mode, Filtering & Minimap (v1.4)
+
+```tsx
+const ref = useRef<NetworkGraph3DRef>(null);
+
+<NetworkGraph3D
+  ref={ref}
+  data={data}
+  layout={{ dimensions: 2, clusterBy: "type" }}  // flat Obsidian-style plane
+  theme="paper"                                   // light theme preset
+  style={{ starField: false, bloomStrength: 0, fogDensity: 0 }}
+  visibleNodeIds={visibleIds}   // hide/show WITHOUT re-running layout
+  clickToFocus={false}          // select on click, no camera flight
+  hoverHighlight                // neighbor highlight on hover
+/>
+<GraphMinimap graphRef={ref} width={200} height={140} />
+```
+
+- `layout.dimensions: 2` — simulation runs in 2D (z locked to 0); camera locks to pan/zoom (drag pans, wheel/pinch zooms, rotation off).
+- `layout.clusterBy: "type" | "group"` + `clusterStrength` — pulls same-key nodes toward a shared centroid so categories form visible clusters.
+- `visibleNodeIds` — client-side filter; hidden nodes/edges/labels vanish via per-instance scale + collapsed segments. Positions are preserved: toggling filters never reheats the simulation.
+- `hoverHighlight` / `hoverHighlightHops` — Obsidian-style neighborhood emphasis on hover (selection wins while active).
+- `theme="paper"` — light background preset; edge blending switches to normal automatically (additive lines vanish on white) and highlight/dim directions invert.
+- `GraphMinimap` — 2D-canvas overview (no second WebGL context): draws all visible nodes + the camera viewport rectangle, click/drag to pan. Powered by `ref.getGraphSnapshot()` / `ref.getViewportRect()` / `ref.panTo(x, y)`.
+
 ## Install
 
 ```bash

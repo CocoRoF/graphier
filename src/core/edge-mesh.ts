@@ -93,7 +93,7 @@ export function createEdgeMesh(
     transparent: true,
     opacity: adaptiveOpacity,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: theme.additiveEdges ? THREE.AdditiveBlending : THREE.NormalBlending,
   });
 
   const mesh = new THREE.LineSegments(geometry, material);
@@ -113,11 +113,23 @@ export function updateEdgePositions(
   positionArray: Float32Array,
   nodePositions: Float32Array,
   edgeNodeIndices: [number, number][],
-  geometry: THREE.BufferGeometry
+  geometry: THREE.BufferGeometry,
+  hiddenEdges?: Uint8Array | null
 ): void {
   const count = edgeNodeIndices.length;
   for (let i = 0; i < count; i++) {
     const [si, ti] = edgeNodeIndices[i];
+    if (hiddenEdges && hiddenEdges[i]) {
+      // Collapse to a zero-length segment at the source node: rasterizes
+      // to nothing, keeps the buffer layout stable (no index shifting).
+      positionArray[i * 6 + 0] = nodePositions[si * 3];
+      positionArray[i * 6 + 1] = nodePositions[si * 3 + 1];
+      positionArray[i * 6 + 2] = nodePositions[si * 3 + 2];
+      positionArray[i * 6 + 3] = nodePositions[si * 3];
+      positionArray[i * 6 + 4] = nodePositions[si * 3 + 1];
+      positionArray[i * 6 + 5] = nodePositions[si * 3 + 2];
+      continue;
+    }
     positionArray[i * 6 + 0] = nodePositions[si * 3];
     positionArray[i * 6 + 1] = nodePositions[si * 3 + 1];
     positionArray[i * 6 + 2] = nodePositions[si * 3 + 2];
