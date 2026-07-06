@@ -39,7 +39,8 @@ const ref = useRef<NetworkGraph3DRef>(null);
 <GraphMinimap graphRef={ref} width={200} height={140} />
 ```
 
-- `layout.dimensions: 2` — simulation runs in 2D (z locked to 0); camera locks to pan/zoom (drag pans, wheel/pinch zooms, rotation off).
+- `layout.dimensions: 2` — flat Obsidian-style plane: simulation runs in 2D (z locked to 0). Left-drag pans, right-drag tilts/orbits the world, wheel/pinch zooms, arrows/WASD pan and z/x zoom (v1.4.1).
+- `enableNodeDrag={false}` — left-drag always reaches the camera even over nodes; essential for dense graphs (v1.4.1).
 - `layout.clusterBy: "type" | "group"` + `clusterStrength` — pulls same-key nodes toward a shared centroid so categories form visible clusters.
 - `linkVisibility={(link) => bool}` — reheat-free per-edge filter (e.g. hide a link type).
 - `visibleNodeIds` — client-side filter; hidden nodes/edges/labels vanish via per-instance scale + collapsed segments. Positions are preserved: toggling filters never reheats the simulation.

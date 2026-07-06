@@ -895,9 +895,14 @@ The renderer automatically adapts to graph size:
 <NetworkGraph3D data={data} layout={{ dimensions: 2 }} />
 ```
 
-The simulation runs in 2D (z locked to 0). The camera locks to pan/zoom:
-left-drag pans, wheel/pinch zooms, rotation is disabled, keyboard flight is
-off. `focusNode`/`panTo`/click-focus stay in-plane.
+The simulation runs in 2D (z locked to 0). Left-drag pans, right-drag
+tilts/orbits the world in 3D, wheel/pinch zooms, and the keyboard uses a
+pan scheme (arrows/WASD pan, z/x zoom). `focusNode`/`panTo`/click-focus
+stay in-plane and reset the view head-on.
+
+On dense graphs also set `enableNodeDrag={false}` — otherwise pointer-down
+raycasts a node almost everywhere and left-drag grabs nodes instead of
+panning.
 
 ### Reheat-free filtering
 
