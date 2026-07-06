@@ -41,6 +41,7 @@ const ref = useRef<NetworkGraph3DRef>(null);
 
 - `layout.dimensions: 2` — simulation runs in 2D (z locked to 0); camera locks to pan/zoom (drag pans, wheel/pinch zooms, rotation off).
 - `layout.clusterBy: "type" | "group"` + `clusterStrength` — pulls same-key nodes toward a shared centroid so categories form visible clusters.
+- `linkVisibility={(link) => bool}` — reheat-free per-edge filter (e.g. hide a link type).
 - `visibleNodeIds` — client-side filter; hidden nodes/edges/labels vanish via per-instance scale + collapsed segments. Positions are preserved: toggling filters never reheats the simulation.
 - `hoverHighlight` / `hoverHighlightHops` — Obsidian-style neighborhood emphasis on hover (selection wins while active).
 - `theme="paper"` — light background preset; edge blending switches to normal automatically (additive lines vanish on white) and highlight/dim directions invert.

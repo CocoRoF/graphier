@@ -114,6 +114,12 @@ export interface NetworkGraph3DProps {
    * null/undefined shows everything.
    */
   visibleNodeIds?: ReadonlySet<string> | string[] | null;
+  /**
+   * Client-side edge filter: return false to hide a link (e.g. by type).
+   * Same reheat-free mechanism as visibleNodeIds — collapsed segments,
+   * simulation untouched. null/undefined shows all edges.
+   */
+  linkVisibility?: ((link: GraphLink) => boolean) | null;
   /** Fly the camera to a node on single-click (default: true) */
   clickToFocus?: boolean;
   /** Highlight a node's neighborhood on hover when nothing is selected (default: false) */
@@ -168,6 +174,7 @@ function NetworkGraph3DInner(
     labelFormatter,
     nodeValueAccessor,
     visibleNodeIds,
+    linkVisibility,
     clickToFocus = true,
     hoverHighlight = false,
     hoverHighlightHops = 1,
@@ -717,22 +724,29 @@ function NetworkGraph3DInner(
   useEffect(() => {
     const d = dataRef.current;
     const gObj = graphObjRef.current;
-    if (!visibleSet) {
+    if (!visibleSet && !linkVisibility) {
       hiddenNodesRef.current = null;
       hiddenEdgesRef.current = null;
     } else {
       const nc = d.nodes.length;
       const hn = new Uint8Array(nc);
-      for (let i = 0; i < nc; i++) {
-        if (!visibleSet.has(d.nodes[i].id)) hn[i] = 1;
+      if (visibleSet) {
+        for (let i = 0; i < nc; i++) {
+          if (!visibleSet.has(d.nodes[i].id)) hn[i] = 1;
+        }
       }
       const ec = d.edgeNodeIndices.length;
       const he = new Uint8Array(ec);
       for (let i = 0; i < ec; i++) {
         const [si, ti] = d.edgeNodeIndices[i];
-        if (hn[si] || hn[ti]) he[i] = 1;
+        if (hn[si] || hn[ti]) {
+          he[i] = 1;
+        } else if (linkVisibility) {
+          const link = d.links[d.edgeLinkIndices[i]];
+          if (link && !linkVisibility(link as GraphLink)) he[i] = 1;
+        }
       }
-      hiddenNodesRef.current = hn;
+      hiddenNodesRef.current = visibleSet ? hn : null;
       hiddenEdgesRef.current = he;
     }
     // Apply immediately when positions exist; otherwise the first worker
@@ -753,7 +767,7 @@ function NetworkGraph3DInner(
         hiddenEdgesRef.current
       );
     }
-  }, [visibleSet, mergedData]);
+  }, [visibleSet, linkVisibility, mergedData]);
 
   /* ── Effect 2c: 2D/3D camera mode ── */
   useEffect(() => {
