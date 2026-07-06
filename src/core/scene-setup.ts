@@ -58,6 +58,17 @@ export function createScene(
 
   const canvas = renderer.domElement;
   canvas.style.setProperty("display", "block", "important");
+  // Block native HTML5 drag / text-selection from hijacking pointer drags
+  // (otherwise the browser can flip the cursor to "no-drop" mid-drag and
+  // swallow the pan/rotate gesture).
+  canvas.draggable = false;
+  canvas.style.userSelect = "none";
+  canvas.style.setProperty("-webkit-user-drag", "none");
+  canvas.style.touchAction = "none";
+  const onDragStart = (e: DragEvent) => e.preventDefault();
+  canvas.addEventListener("dragstart", onDragStart);
+  const onSelectStart = (e: Event) => e.preventDefault();
+  canvas.addEventListener("selectstart", onSelectStart);
   container.appendChild(canvas);
 
   const controls = new OrbitControls(camera, canvas);
@@ -110,7 +121,11 @@ export function createScene(
     (controls.target as THREE.Vector3).addScaledVector(_wheelDir, moveAmount);
   };
   canvas.addEventListener("wheel", onWheel, { passive: false });
-  const scrollCleanup = () => canvas.removeEventListener("wheel", onWheel);
+  const scrollCleanup = () => {
+    canvas.removeEventListener("wheel", onWheel);
+    canvas.removeEventListener("dragstart", onDragStart);
+    canvas.removeEventListener("selectstart", onSelectStart);
+  };
 
   return {
     scene,
