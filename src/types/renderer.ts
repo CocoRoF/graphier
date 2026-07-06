@@ -35,6 +35,13 @@ export interface NavigationConfig {
    * (default: cameraMode in 3D, "pan" in 2D)
    */
   keyboard?: "fly" | "orbit" | "pan" | "off";
+  /**
+   * Base drag-pan speed multiplier (default: 1 = cursor-accurate at the
+   * orbit-target depth). On top of this, pan automatically accelerates
+   * up to 3x as the camera zooms deep into the graph — otherwise
+   * traversing a large graph while zoomed in takes dozens of drags.
+   */
+  panSpeed?: number;
 }
 
 /** Raw per-frame node buffers for lightweight overlays (e.g. minimap) */

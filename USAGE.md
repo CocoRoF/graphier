@@ -947,6 +947,10 @@ the pivot is the orbit target at the screen center. Panning always follows
 the screen axes, wheel zoom dollies toward the target without moving it,
 and zoom-to-fit levels the horizon.
 
+Drag-pan speed is zoom-adaptive (v1.4.5): cursor-accurate (1:1) while the
+whole graph is in view, accelerating up to 3x as you zoom deep in so large
+graphs stay traversable. `navigation.panSpeed` multiplies on top.
+
 ### Cluster force
 
 ```tsx

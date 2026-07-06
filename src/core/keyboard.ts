@@ -80,8 +80,9 @@ function createPanUpdate(
 
     if (dx || dy) {
       // Screen-aligned pan: move camera + target along the camera's
-      // local right/up axes so it stays intuitive when the plane is tilted
-      const step = Math.max(dist, 50) * PAN_SPEED;
+      // local right/up axes so it stays intuitive when the plane is tilted.
+      // controls.panSpeed carries the zoom-adaptive boost.
+      const step = Math.max(dist, 50) * PAN_SPEED * (controls.panSpeed || 1);
       _panRight.setFromMatrixColumn(camera.matrix, 0);
       _panUp.setFromMatrixColumn(camera.matrix, 1);
       _panOffset

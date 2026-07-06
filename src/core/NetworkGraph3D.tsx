@@ -370,7 +370,34 @@ function NetworkGraph3DInner(
     sceneRef.current = state;
 
     // Animation loop with label updates (highlight-aware)
+    let panBoostAt = 0;
+    let graphRadius = 0;
     const cancelAnim = startAnimationLoop(state, () => {
+      // Zoom-adaptive pan boost: cursor-accurate (1:1) while the whole
+      // graph is in view, accelerating up to 3x when zoomed deep in so
+      // large graphs stay traversable. Throttled — O(n) radius scan.
+      const nowMs = performance.now();
+      if (nowMs - panBoostAt > 400) {
+        panBoostAt = nowMs;
+        const pos = dataRef.current.positions;
+        if (pos) {
+          let maxSq = 0;
+          for (let i = 0; i < pos.length; i += 3) {
+            const sq =
+              pos[i] * pos[i] + pos[i + 1] * pos[i + 1] + pos[i + 2] * pos[i + 2];
+            if (sq > maxSq) maxSq = sq;
+          }
+          graphRadius = Math.sqrt(maxSq);
+        }
+        if (graphRadius > 0) {
+          const dist = state.camera.position.distanceTo(
+            state.controls.target as THREE.Vector3
+          );
+          const boost = Math.min(3, Math.max(1, graphRadius / (3 * dist)));
+          state.controls.panSpeed = state.flags.panSpeedBase * boost;
+        }
+      }
+
       updateLabels(
         state.labels,
         dataRef.current.nodes,

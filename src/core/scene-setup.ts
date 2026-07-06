@@ -33,6 +33,8 @@ export interface SceneState {
     keyboardMode3D: "fly" | "orbit";
     /** Pointer button that rotates via the trackball handler (null = off) */
     rotateButton: number | null;
+    /** Base pan-speed multiplier (zoom-adaptive boost applies on top) */
+    panSpeedBase: number;
   };
 }
 
@@ -116,6 +118,7 @@ export function createScene(
     is2D: false,
     keyboardMode3D: cameraMode,
     rotateButton: null,
+    panSpeedBase: 1,
   };
   const _wheelOffset = new THREE.Vector3();
   const onWheel = (e: WheelEvent) => {
@@ -281,6 +284,9 @@ export function applyNavigationMode(
   // linear wheel handler registered in createScene.
   controls.enableZoom = is2D;
   controls.screenSpacePanning = true;
+
+  state.flags.panSpeedBase = nav?.panSpeed ?? 1;
+  controls.panSpeed = state.flags.panSpeedBase;
 
   const kb = nav?.keyboard ?? (is2D ? "pan" : state.flags.keyboardMode3D);
   if (kb === "off") {
