@@ -887,6 +887,78 @@ The renderer automatically adapts to graph size:
 
 ---
 
+## 19. v1.4 Features: 2D Mode, Filtering, Minimap, Light Theme
+
+### 2D flat mode (Obsidian-style)
+
+```tsx
+<NetworkGraph3D data={data} layout={{ dimensions: 2 }} />
+```
+
+The simulation runs in 2D (z locked to 0). The camera locks to pan/zoom:
+left-drag pans, wheel/pinch zooms, rotation is disabled, keyboard flight is
+off. `focusNode`/`panTo`/click-focus stay in-plane.
+
+### Reheat-free filtering
+
+```tsx
+<NetworkGraph3D
+  data={data}
+  visibleNodeIds={new Set(["a", "b"])}        // null/undefined = show all
+  linkVisibility={(l) => l.type !== "tag"}     // null = show all
+/>
+```
+
+Hidden nodes collapse to near-zero scale (invisible, un-raycastable) and
+hidden edges collapse to zero-length segments. The force simulation is NOT
+restarted — positions are preserved exactly, so toggling filters is a pure
+GPU buffer update (~O(n) matrix writes, no layout jump).
+
+### Interaction options
+
+```tsx
+<NetworkGraph3D clickToFocus={false} hoverHighlight hoverHighlightHops={1} />
+```
+
+- `clickToFocus={false}` — single-click selects without flying the camera.
+- `hoverHighlight` — Obsidian-style neighborhood emphasis on hover; an
+  explicit `selectedNodeId` always wins over hover.
+
+### Cluster force
+
+```tsx
+<NetworkGraph3D layout={{ clusterBy: "type", clusterStrength: 0.05 }} />
+```
+
+Pulls nodes sharing a `type` (or `group`) toward their group centroid so
+categories form visible clusters.
+
+### GraphMinimap
+
+```tsx
+const ref = useRef<NetworkGraph3DRef>(null);
+<NetworkGraph3D ref={ref} data={data} layout={{ dimensions: 2 }} />
+<GraphMinimap graphRef={ref} width={200} height={140} />
+```
+
+A canvas-2D overview (no second WebGL context): draws all visible nodes with
+their instance colors plus the camera viewport rectangle; click/drag pans the
+main camera. Powered by three new ref methods — `getGraphSnapshot()`,
+`getViewportRect()`, `panTo(x, y, duration?)`.
+
+### Light theme
+
+```tsx
+<NetworkGraph3D theme="paper" style={{ starField: false, bloomStrength: 0, fogDensity: 0 }} />
+```
+
+`resolveTheme` detects background luminance: on light backgrounds edge
+blending switches to normal (additive lines vanish on white), "bright"
+emphasis colors darken instead of whitening, and selection dimming fades
+toward the background instead of toward black. Custom light themes work the
+same way — just set a light `backgroundColor` (and optionally
+`blending: "normal"`).
+
 ## License
 
 MIT

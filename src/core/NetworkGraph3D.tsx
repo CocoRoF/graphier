@@ -255,6 +255,12 @@ function NetworkGraph3DInner(
   const is2D = layoutProp?.dimensions === 2;
   is2DRef.current = is2D;
 
+  // Value-compare the layout config so an inline `layout={{...}}` object
+  // (new identity every render) doesn't tear down meshes + worker each time.
+  const layoutKey = JSON.stringify(layoutProp ?? null);
+  const layoutRef = useRef(layoutProp);
+  layoutRef.current = layoutProp;
+
   /* ── Merge external data with appended data ── */
   const mergedData: GraphData = useMemo(() => {
     if (!appendedData) return data;
@@ -664,13 +670,14 @@ function NetworkGraph3DInner(
     };
 
     // Send layout params with preserved positions for existing nodes
-    const layoutParams = resolveLayoutParams(nc, layoutProp);
+    const layoutConfig = layoutRef.current;
+    const layoutParams = resolveLayoutParams(nc, layoutConfig);
 
     // Optional cluster force: map each node's cluster key to a group index
     let groups: number[] | undefined;
-    if (layoutProp?.clusterBy) {
+    if (layoutConfig?.clusterBy) {
       const keyOf = (n: GraphNode) =>
-        layoutProp.clusterBy === "type" ? n.type : (n as any).group;
+        layoutConfig.clusterBy === "type" ? n.type : (n as any).group;
       const keyToIdx = new Map<string, number>();
       groups = nodes.map((n) => {
         const k = keyOf(n);
@@ -718,7 +725,7 @@ function NetworkGraph3DInner(
       disposeObject(edgeResult.mesh);
       graphObjRef.current = null;
     };
-  }, [mergedData, valRange, nodeValueAccessor, layoutProp]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mergedData, valRange, nodeValueAccessor, layoutKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Effect 2b: Visibility filter (never reheats the layout) ── */
   useEffect(() => {

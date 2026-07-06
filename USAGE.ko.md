@@ -887,6 +887,77 @@ export {
 
 ---
 
+## 19. v1.4 기능: 2D 모드, 필터링, 미니맵, 라이트 테마
+
+### 2D 평면 모드 (Obsidian 스타일)
+
+```tsx
+<NetworkGraph3D data={data} layout={{ dimensions: 2 }} />
+```
+
+시뮬레이션이 2D로 동작하며(z는 0에 고정), 카메라는 팬/줌으로 잠깁니다.
+좌클릭 드래그 = 팬, 휠/핀치 = 줌, 회전과 키보드 비행은 비활성화됩니다.
+`focusNode`/`panTo`/클릭 포커스도 평면 내에서 동작합니다.
+
+### 리히트 없는 필터링
+
+```tsx
+<NetworkGraph3D
+  data={data}
+  visibleNodeIds={new Set(["a", "b"])}        // null/undefined = 전체 표시
+  linkVisibility={(l) => l.type !== "tag"}     // null = 전체 표시
+/>
+```
+
+숨긴 노드는 스케일이 0에 수렴해 보이지 않고 레이캐스트에도 잡히지 않으며,
+숨긴 엣지는 길이 0 세그먼트로 접힙니다. 포스 시뮬레이션은 재시작되지
+않습니다 — 위치가 그대로 보존되므로 필터 토글은 순수 GPU 버퍼 갱신입니다
+(레이아웃 점프 없음).
+
+### 인터랙션 옵션
+
+```tsx
+<NetworkGraph3D clickToFocus={false} hoverHighlight hoverHighlightHops={1} />
+```
+
+- `clickToFocus={false}` — 클릭 시 카메라 비행 없이 선택만 합니다.
+- `hoverHighlight` — 호버 시 이웃 강조(Obsidian 스타일). 명시적
+  `selectedNodeId`가 항상 호버보다 우선합니다.
+
+### 클러스터 포스
+
+```tsx
+<NetworkGraph3D layout={{ clusterBy: "type", clusterStrength: 0.05 }} />
+```
+
+같은 `type`(또는 `group`)의 노드를 그룹 중심으로 끌어당겨 카테고리가
+시각적 클러스터를 형성합니다.
+
+### GraphMinimap
+
+```tsx
+const ref = useRef<NetworkGraph3DRef>(null);
+<NetworkGraph3D ref={ref} data={data} layout={{ dimensions: 2 }} />
+<GraphMinimap graphRef={ref} width={200} height={140} />
+```
+
+캔버스 2D 오버뷰(두 번째 WebGL 컨텍스트 없음): 보이는 노드 전체를 인스턴스
+색상으로 그리고 카메라 뷰포트 사각형을 표시하며, 클릭/드래그로 메인
+카메라를 팬합니다. 새 ref 메서드 `getGraphSnapshot()` /
+`getViewportRect()` / `panTo(x, y, duration?)` 기반입니다.
+
+### 라이트 테마
+
+```tsx
+<NetworkGraph3D theme="paper" style={{ starField: false, bloomStrength: 0, fogDensity: 0 }} />
+```
+
+`resolveTheme`이 배경 휘도를 감지합니다: 밝은 배경에서는 엣지 블렌딩이
+normal로 전환되고(가산 블렌딩은 흰 배경에서 사라짐), "bright" 강조색은
+밝아지는 대신 어두워지며, 선택 시 딤 처리는 검정 대신 배경 쪽으로
+페이드됩니다. 커스텀 라이트 테마도 밝은 `backgroundColor`만 지정하면
+동일하게 동작합니다(필요 시 `blending: "normal"`).
+
 ## 라이센스
 
 MIT
