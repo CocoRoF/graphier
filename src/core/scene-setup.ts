@@ -28,7 +28,12 @@ export interface SceneState {
   keyboard: KeyboardControlState;
   scrollCleanup: () => void;
   /** Mutable runtime flags shared with input handlers */
-  flags: { is2D: boolean; keyboardMode3D: "fly" | "orbit" };
+  flags: {
+    is2D: boolean;
+    keyboardMode3D: "fly" | "orbit";
+    /** Pointer button that rotates via the trackball handler (null = off) */
+    rotateButton: number | null;
+  };
 }
 
 export function createScene(
@@ -78,6 +83,10 @@ export function createScene(
   controls.zoomSpeed = 1.2;
   controls.minDistance = 10;
   controls.maxDistance = 30000;
+  // Pan always follows the screen axes — with world-plane panning a
+  // vertical drag on a head-on camera degenerates into a dolly (reads
+  // as an unwanted zoom).
+  controls.screenSpacePanning = true;
 
   // Ambient light
   scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -103,28 +112,43 @@ export function createScene(
   // Moves camera + target along look direction, proportional to scroll delta.
   // In 2D mode OrbitControls handles wheel + pinch itself (enableZoom).
   controls.enableZoom = false;
-  const flags: { is2D: boolean; keyboardMode3D: "fly" | "orbit" } = {
+  const flags: SceneState["flags"] = {
     is2D: false,
     keyboardMode3D: cameraMode,
+    rotateButton: null,
   };
-  const _wheelDir = new THREE.Vector3();
+  const _wheelOffset = new THREE.Vector3();
   const onWheel = (e: WheelEvent) => {
     if (flags.is2D) return;
     e.preventDefault();
     let delta = -e.deltaY;
     if (e.deltaMode === 1) delta *= 40;   // line → pixels
     if (e.deltaMode === 2) delta *= 800;  // page → pixels
-    camera.getWorldDirection(_wheelDir);
-    const dist = camera.position.distanceTo(controls.target as THREE.Vector3);
+    // Dolly toward the orbit target WITHOUT moving it — the target is the
+    // rotation pivot and must stay on what the user is looking at
+    // (dragging it through the scene made later rotations swing wildly).
+    const target = controls.target as THREE.Vector3;
+    _wheelOffset.copy(camera.position).sub(target);
+    const dist = _wheelOffset.length();
     const moveAmount = delta * 0.002 * Math.max(dist * 0.1, 1);
-    camera.position.addScaledVector(_wheelDir, moveAmount);
-    (controls.target as THREE.Vector3).addScaledVector(_wheelDir, moveAmount);
+    const newDist = Math.min(
+      Math.max(dist - moveAmount, controls.minDistance),
+      controls.maxDistance
+    );
+    _wheelOffset.setLength(newDist);
+    camera.position.copy(target).add(_wheelOffset);
   };
   canvas.addEventListener("wheel", onWheel, { passive: false });
+
+  // Trackball rotation: screen-relative axes through the orbit target.
+  // OrbitControls always yaws around world-Y, which feels wrong once the
+  // view is tilted — the rotation axes must come from the CURRENT view.
+  const trackballCleanup = setupTrackballRotation(canvas, camera, controls, flags);
   const scrollCleanup = () => {
     canvas.removeEventListener("wheel", onWheel);
     canvas.removeEventListener("dragstart", onDragStart);
     canvas.removeEventListener("selectstart", onSelectStart);
+    trackballCleanup();
   };
 
   return {
@@ -143,10 +167,84 @@ export function createScene(
   };
 }
 
-const MOUSE_ACTION = {
-  rotate: THREE.MOUSE.ROTATE,
-  pan: THREE.MOUSE.PAN,
-} as const;
+/** Radians of rotation per pixel of pointer travel */
+const TRACKBALL_SPEED = 0.004;
+
+/**
+ * Screen-relative (trackball) rotation around the orbit target.
+ * Horizontal drag spins around the camera's up axis, vertical drag
+ * around its right axis — the axes are rebuilt from the current view
+ * every move, so rotation always matches what the user sees.
+ */
+function setupTrackballRotation(
+  canvas: HTMLCanvasElement,
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  flags: SceneState["flags"]
+): () => void {
+  let rotating = false;
+  let lastX = 0;
+  let lastY = 0;
+  const _offset = new THREE.Vector3();
+  const _right = new THREE.Vector3();
+  const _upAxis = new THREE.Vector3();
+  const _q = new THREE.Quaternion();
+  const _qPitch = new THREE.Quaternion();
+
+  function onDown(e: PointerEvent) {
+    if (flags.rotateButton == null || e.button !== flags.rotateButton) return;
+    rotating = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      /* capture unsupported */
+    }
+  }
+
+  function onMove(e: PointerEvent) {
+    if (!rotating) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    if (!dx && !dy) return;
+
+    const target = controls.target as THREE.Vector3;
+    _offset.copy(camera.position).sub(target);
+    _right.setFromMatrixColumn(camera.matrix, 0);
+    _upAxis.setFromMatrixColumn(camera.matrix, 1);
+    _q.setFromAxisAngle(_upAxis, -dx * TRACKBALL_SPEED);
+    _qPitch.setFromAxisAngle(_right, -dy * TRACKBALL_SPEED);
+    _q.multiply(_qPitch);
+    _offset.applyQuaternion(_q);
+    camera.up.applyQuaternion(_q).normalize();
+    camera.position.copy(target).add(_offset);
+    camera.lookAt(target);
+  }
+
+  function onUp(e: PointerEvent) {
+    if (!rotating) return;
+    rotating = false;
+    try {
+      canvas.releasePointerCapture(e.pointerId);
+    } catch {
+      /* not captured */
+    }
+  }
+
+  canvas.addEventListener("pointerdown", onDown);
+  canvas.addEventListener("pointermove", onMove);
+  canvas.addEventListener("pointerup", onUp);
+  canvas.addEventListener("pointercancel", onUp);
+  return () => {
+    canvas.removeEventListener("pointerdown", onDown);
+    canvas.removeEventListener("pointermove", onMove);
+    canvas.removeEventListener("pointerup", onUp);
+    canvas.removeEventListener("pointercancel", onUp);
+  };
+}
 
 /**
  * Apply the navigation scheme for the current layout dimensionality,
@@ -164,12 +262,17 @@ export function applyNavigationMode(
 
   const left = nav?.leftButton ?? (is2D ? "pan" : "rotate");
   const right = nav?.rightButton ?? (is2D ? "rotate" : "pan");
+  // Rotation is handled by the screen-relative trackball handler — the
+  // rotate button maps to NONE in OrbitControls so only pan/dolly remain.
+  const NONE = -1 as unknown as THREE.MOUSE;
   controls.mouseButtons = {
-    LEFT: MOUSE_ACTION[left],
+    LEFT: left === "pan" ? THREE.MOUSE.PAN : NONE,
     MIDDLE: THREE.MOUSE.DOLLY,
-    RIGHT: MOUSE_ACTION[right],
+    RIGHT: right === "pan" ? THREE.MOUSE.PAN : NONE,
   };
-  controls.enableRotate = left === "rotate" || right === "rotate";
+  controls.enableRotate = false;
+  state.flags.rotateButton =
+    left === "rotate" ? 0 : right === "rotate" ? 2 : null;
   controls.touches =
     left === "pan"
       ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }
@@ -177,7 +280,7 @@ export function applyNavigationMode(
   // 2D uses OrbitControls dolly (wheel + pinch); 3D keeps the custom
   // linear wheel handler registered in createScene.
   controls.enableZoom = is2D;
-  controls.screenSpacePanning = is2D;
+  controls.screenSpacePanning = true;
 
   const kb = nav?.keyboard ?? (is2D ? "pan" : state.flags.keyboardMode3D);
   if (kb === "off") {

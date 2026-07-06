@@ -941,6 +941,12 @@ Remaps pointer buttons and the keyboard scheme independently of layout
 dimensionality. Defaults — 3D: left=rotate, right=pan, keyboard=`cameraMode`;
 2D: left=pan, right=rotate, keyboard="pan". `keyboard: "off"` disables keys.
 
+Since v1.4.4 rotation is screen-relative (trackball): horizontal drag spins
+around the current view's up axis, vertical drag around its right axis, and
+the pivot is the orbit target at the screen center. Panning always follows
+the screen axes, wheel zoom dollies toward the target without moving it,
+and zoom-to-fit levels the horizon.
+
 ### Cluster force
 
 ```tsx

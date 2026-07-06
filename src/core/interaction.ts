@@ -298,8 +298,9 @@ export function setupInteraction(
 
   // Context menu (right-click)
   function onContextMenu(e: MouseEvent) {
-    if (!callbacks.onContextMenu) return;
+    // Always suppress the native menu — right-drag is a camera gesture
     e.preventDefault();
+    if (!callbacks.onContextMenu) return;
 
     const nodesMesh = getNodesMesh();
     if (!nodesMesh) return;

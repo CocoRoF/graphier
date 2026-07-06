@@ -50,6 +50,9 @@ export function zoomToFitPositions(
   const count = positions.length / 3;
   if (count === 0) return;
 
+  // Fit doubles as "reset view": level the horizon (trackball roll)
+  camera.up.set(0, 1, 0);
+
   // Compute centroid
   let cx = 0, cy = 0, cz = 0;
   for (let i = 0; i < count; i++) {
