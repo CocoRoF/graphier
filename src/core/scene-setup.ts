@@ -7,7 +7,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import type { NavigationConfig, RendererConfig, StyleConfig } from "../types";
-import { createStarField } from "./effects";
+import { createStarField, createNebula } from "./effects";
 import { createSelectionRing } from "./selection";
 import {
   createLabelSystem,
@@ -21,6 +21,9 @@ export interface SceneState {
   renderer: THREE.WebGLRenderer;
   controls: OrbitControls;
   stars: THREE.Points;
+  nebula: THREE.Mesh | null;
+  /** ShaderMaterials with a `uTime` uniform driven by the animation clock. */
+  animatedMaterials: THREE.ShaderMaterial[];
   selectionRing: THREE.Group;
   labels: LabelState;
   composer: EffectComposer | null;
@@ -93,10 +96,36 @@ export function createScene(
   // Ambient light
   scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 
+  const animatedMaterials: THREE.ShaderMaterial[] = [];
+
+  // Is the ground dark? Nebula + additive stars only read on dark space; on a
+  // light ground they turn to noise, so gate the cosmic backdrop here.
+  const bg = new THREE.Color(backgroundColor);
+  const isDark = bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114 < 0.5;
+
+  // Nebula backdrop (behind the stars). Void tint tracks the background so the
+  // clouds fade into the scene's own darkness instead of a hard seam.
+  let nebula: THREE.Mesh | null = null;
+  if (isDark && style.nebula) {
+    nebula = createNebula(40000, {
+      void: backgroundColor,
+      a: "#2a1a55", // violet
+      b: "#0c3a4a", // teal
+      c: "#3a1030", // magenta
+      intensity: 0.9,
+    });
+    scene.add(nebula);
+    animatedMaterials.push(nebula.material as THREE.ShaderMaterial);
+  }
+
   // Star field
   const stars = createStarField(4000, 8000);
   stars.visible = style.starField;
   scene.add(stars);
+  animatedMaterials.push(stars.material as THREE.ShaderMaterial);
+
+  // A touch more exposure so the planetary glow and stars carry the scene.
+  if (isDark) renderer.toneMappingExposure = 1.32;
 
   // Selection ring
   const selectionRing = createSelectionRing();
@@ -160,6 +189,8 @@ export function createScene(
     renderer,
     controls,
     stars,
+    nebula,
+    animatedMaterials,
     selectionRing,
     labels,
     composer: null,
@@ -345,9 +376,18 @@ export function startAnimationLoop(
   let animFrame: number;
   let wasKeyboardActive = false;
   const _syncDir = new THREE.Vector3();
+  const clock = new THREE.Clock();
 
   function animate() {
     animFrame = requestAnimationFrame(animate);
+
+    // Drive time-based shaders (planet spin, star twinkle, nebula drift).
+    const elapsed = clock.getElapsedTime();
+    for (let i = 0; i < state.animatedMaterials.length; i++) {
+      const u = state.animatedMaterials[i].uniforms;
+      if (u && u.uTime) u.uTime.value = elapsed;
+    }
+
     // When keyboard is driving camera, skip OrbitControls.update()
     // to prevent its polar angle clamping from overriding our rotation
     const keyboardActive = state.keyboard.update();

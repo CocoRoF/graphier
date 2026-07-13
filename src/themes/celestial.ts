@@ -26,4 +26,16 @@ export const celestial: ThemeConfig = {
   defaultNodeColor: "#8b949e",
   defaultLinkColor: "#8b949e",
   backgroundColor: "#030810",
+  // Planet hues for auto-assigned (unmapped) node types — a spread of stellar
+  // temperatures so a graph of mixed types reads like a varied star system.
+  palette: [
+    "#4c9fff", // azure
+    "#f5b43a", // amber
+    "#a371f7", // violet
+    "#ff5c8a", // rose
+    "#2dd4bf", // teal
+    "#ff6b4a", // ember
+    "#46d160", // green
+    "#8b95d4", // pale indigo
+  ],
 };

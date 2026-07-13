@@ -377,6 +377,14 @@ function NetworkGraph3DInner(
       // graph is in view, accelerating up to 3x when zoomed deep in so
       // large graphs stay traversable. Throttled — O(n) radius scan.
       const nowMs = performance.now();
+
+      // Drive the planet-surface spin. Fetched from the live ref each frame so
+      // rebuilds swap the material transparently — no register/unregister.
+      const nodeMat = graphObjRef.current?.nodesMesh.material as
+        | THREE.ShaderMaterial
+        | undefined;
+      if (nodeMat?.uniforms?.uTime) nodeMat.uniforms.uTime.value = nowMs / 1000;
+
       if (nowMs - panBoostAt > 400) {
         panBoostAt = nowMs;
         const pos = dataRef.current.positions;

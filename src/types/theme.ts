@@ -40,6 +40,11 @@ export interface StyleConfig {
   bloomThreshold?: number;
   /** Show background star field (default: true) */
   starField?: boolean;
+  /**
+   * Show the drifting deep-space nebula backdrop (default: true).
+   * Only renders on dark backgrounds — a nebula on a light ground is noise.
+   */
+  nebula?: boolean;
   /** Exponential fog density (default: 0.0006, 0 = disabled) */
   fogDensity?: number;
   /** Auto-orbit camera rotation (default: false) */
@@ -65,10 +70,11 @@ export const DEFAULT_STYLE: Required<StyleConfig> = {
   nodeMinSize: 1,
   nodeMaxSize: 15,
   edgeOpacity: 0.15,
-  bloomStrength: 0.6,
-  bloomRadius: 0.1,
+  bloomStrength: 0.72,
+  bloomRadius: 0.32,
   bloomThreshold: 0.1,
   starField: true,
+  nebula: true,
   fogDensity: 0.0006,
   autoOrbit: false,
   labelScale: 1.0,
