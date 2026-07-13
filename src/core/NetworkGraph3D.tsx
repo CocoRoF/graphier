@@ -648,7 +648,13 @@ function NetworkGraph3DInner(
         (nodes[i] as any).z = tmpVec.z;
       }
       dataRef.current.positions = initPos;
-      setTimeout(() => zoomToFitPositions(camera, controls, initPos, 800, 100), 300);
+      // Initial framing — but only if the user hasn't already grabbed the camera
+      // during the first 300ms. Never yank a viewpoint they set themselves.
+      setTimeout(() => {
+        if (!sceneRef.current?.flags.userAdjusted) {
+          zoomToFitPositions(camera, controls, initPos, 800, 100);
+        }
+      }, 300);
       return;
     }
     graphObjRef.current.worker = worker;
@@ -988,6 +994,9 @@ function NetworkGraph3DInner(
       const p = dataRef.current.positions;
       if (!s || !p) return;
       zoomToFitPositions(s.camera, s.controls, p, duration, padding);
+    },
+    hasUserAdjustedCamera() {
+      return sceneRef.current?.flags.userAdjusted ?? false;
     },
     zoomIn() {
       const s = sceneRef.current;

@@ -38,6 +38,12 @@ export interface SceneState {
     rotateButton: number | null;
     /** Base pan-speed multiplier (zoom-adaptive boost applies on top) */
     panSpeedBase: number;
+    /**
+     * True once the user has moved the camera (rotate / pan / zoom / keyboard).
+     * Auto-fit (initial + on-settle) is suppressed after this so a viewpoint the
+     * user set mid-layout is never yanked back when the layout finishes.
+     */
+    userAdjusted: boolean;
   };
 }
 
@@ -148,10 +154,17 @@ export function createScene(
     keyboardMode3D: cameraMode,
     rotateButton: null,
     panSpeedBase: 1,
+    userAdjusted: false,
   };
+  // OrbitControls fires "start" when the user begins a pan/dolly gesture — mark
+  // the camera as user-adjusted so auto-fit stops overriding their viewpoint.
+  controls.addEventListener("start", () => {
+    flags.userAdjusted = true;
+  });
   const _wheelOffset = new THREE.Vector3();
   const onWheel = (e: WheelEvent) => {
     if (flags.is2D) return;
+    flags.userAdjusted = true;
     e.preventDefault();
     let delta = -e.deltaY;
     if (e.deltaMode === 1) delta *= 40;   // line → pixels
@@ -227,6 +240,7 @@ function setupTrackballRotation(
 
   function onDown(e: PointerEvent) {
     if (flags.rotateButton == null || e.button !== flags.rotateButton) return;
+    flags.userAdjusted = true;
     rotating = true;
     lastX = e.clientX;
     lastY = e.clientY;
@@ -391,6 +405,7 @@ export function startAnimationLoop(
     // When keyboard is driving camera, skip OrbitControls.update()
     // to prevent its polar angle clamping from overriding our rotation
     const keyboardActive = state.keyboard.update();
+    if (keyboardActive) state.flags.userAdjusted = true;
 
     // When keyboard navigation just stopped, sync OrbitControls to
     // current camera state so the view doesn't snap back.

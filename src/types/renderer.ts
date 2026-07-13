@@ -75,6 +75,12 @@ export interface NetworkGraph3DRef {
   ): void;
   /** Zoom to fit all nodes in view */
   zoomToFit(duration?: number, padding?: number): void;
+  /**
+   * True once the user has moved the camera (rotate / pan / zoom / keyboard).
+   * Hosts can gate an on-settle auto-fit on this so a viewpoint the user set
+   * mid-layout is never reset when the layout finishes.
+   */
+  hasUserAdjustedCamera(): boolean;
   /** Zoom in toward center */
   zoomIn(): void;
   /** Zoom out from center */
