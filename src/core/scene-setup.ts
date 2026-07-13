@@ -402,8 +402,13 @@ export function startAnimationLoop(
       (state.controls.target as THREE.Vector3)
         .copy(state.camera.position)
         .add(_syncDir.multiplyScalar(dist));
-      // Reset up to world-Y so OrbitControls works correctly
-      state.camera.up.set(0, 1, 0);
+      // Re-anchor the orbit target ahead of the camera so OrbitControls resumes
+      // smoothly — but PRESERVE the current up/orientation. Snapping up back to
+      // world-Y here was resetting any trackball tilt the instant keyboard nav
+      // stopped (rotate → WASD → jarring re-level). OrbitControls reads
+      // object.up each update(), so a tilted up is handled correctly. lookAt
+      // with the (unchanged) up + a target along the view direction is a no-op
+      // orientation-wise, so the view stays exactly where the user left it.
       state.camera.lookAt(state.controls.target as THREE.Vector3);
     }
     wasKeyboardActive = keyboardActive;

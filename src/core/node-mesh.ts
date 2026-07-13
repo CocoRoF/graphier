@@ -75,14 +75,14 @@ const NODE_FRAGMENT_SHADER = /* glsl */ `
     float NdotV = max(dot(n, v), 0.0);
     vec3 base = vColor;
 
-    // Procedural surface — banded fbm + mottled continents, spinning over time.
-    // Speed + tilt + noise offset all varied per-instance by aSeed.
-    float spin = uTime * (0.04 + 0.05 * fract(vSeed * 1.7)) + vSeed * 6.2831;
+    // Subtle surface variation — a gentle low-frequency sheen so each body has
+    // some life, NOT a richly-textured planet. Low frequency + low contrast
+    // keeps the read closer to a soft glowing orb. Slowly drifts via uTime.
+    float spin = uTime * (0.03 + 0.03 * fract(vSeed * 1.7)) + vSeed * 6.2831;
     vec3 sN = rotX(vSeed * 0.7) * rotY(spin) * vObjPos;
-    float bands = fbm(vec3(sN.x * 2.1, sN.y * 7.0, sN.z * 2.1) + vSeed * 9.0);
-    float mottle = fbm(sN * 4.6 + vSeed * 3.0);
-    float surf = smoothstep(0.27, 0.82, mix(bands, mottle, 0.45));
-    vec3 albedo = mix(base * 0.42, mix(base, vec3(1.0), 0.32), surf);
+    float surf = fbm(vec3(sN.x * 1.6, sN.y * 3.0, sN.z * 1.6) + vSeed * 9.0);
+    surf = smoothstep(0.25, 0.85, surf);
+    vec3 albedo = mix(base * 0.74, mix(base, vec3(1.0), 0.16), surf);
 
     // Day/night terminator — a single directional star light.
     vec3 L = normalize(vec3(0.5, 0.55, 0.62));
