@@ -6,10 +6,9 @@ import * as THREE from "three";
 import type { GraphNode } from "../types";
 import type { ResolvedTheme } from "../themes/resolve-theme";
 
-/** Vertex shader: instance transform + object-space surface point + per-instance seed */
+/** Vertex shader: instance transform + view normal / view dir + per-instance seed */
 const NODE_VERTEX_SHADER = /* glsl */ `
   attribute float aSeed;
-  varying vec3 vObjPos;
   varying vec3 vNormal;
   varying vec3 vViewDir;
   varying vec3 vColor;
@@ -21,10 +20,6 @@ const NODE_VERTEX_SHADER = /* glsl */ `
       vColor = instanceColor;
     #endif
     vSeed = aSeed;
-    // Object-space surface direction (unit sphere) — stable per-planet pattern
-    // regardless of the instance's world position, so the procedural surface
-    // "sticks" to the body and rotates with it (see uTime spin in the fragment).
-    vObjPos = normalize(position);
 
     vec4 localPos = vec4(position, 1.0);
     #ifdef USE_INSTANCING
@@ -44,66 +39,44 @@ const NODE_VERTEX_SHADER = /* glsl */ `
 `;
 
 /**
- * Fragment shader: planetary body.
- * Day/night terminator + procedural surface bands (self-rotating) + atmospheric
- * Fresnel rim (bloom picks it up as a glowing halo) + specular star-glint.
+ * Fragment shader: glowing ring / outline node.
+ * The sphere is rendered as a bright hollow ring — a crisp stroke just inside
+ * the silhouette plus a soft outward glow (bloom-lit). Because a sphere's
+ * silhouette is always a camera-facing circle, this reads as a clean outlined
+ * disc from any angle. The interior is (almost) transparent so the node is a
+ * ring, not a filled body. A gentle per-node pulse keeps the glow alive.
  */
 const NODE_FRAGMENT_SHADER = /* glsl */ `
   uniform float uGlowIntensity;
   uniform float uTime;
-  varying vec3 vObjPos;
   varying vec3 vNormal;
   varying vec3 vViewDir;
   varying vec3 vColor;
   varying float vSeed;
 
-  float hash(vec3 p){ p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0;
-    return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-  float vnoise(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(hash(i + vec3(0,0,0)), hash(i + vec3(1,0,0)), f.x),
-                   mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-               mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
-                   mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z); }
-  float fbm(vec3 p){ float a = 0.5, s = 0.0;
-    for (int i = 0; i < 4; i++){ s += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; } return s; }
-  mat3 rotY(float a){ float c = cos(a), s = sin(a); return mat3(c,0.,s, 0.,1.,0., -s,0.,c); }
-  mat3 rotX(float a){ float c = cos(a), s = sin(a); return mat3(1.,0.,0., 0.,c,-s, 0.,s,c); }
-
   void main() {
     vec3 n = normalize(vNormal);
     vec3 v = normalize(vViewDir);
-    float NdotV = max(dot(n, v), 0.0);
+    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+    // Screen-space radius on the projected disc: 0 at centre → 1 at silhouette.
+    float rho = sqrt(max(0.0, 1.0 - NdotV * NdotV));
     vec3 base = vColor;
 
-    // Subtle surface variation — a gentle low-frequency sheen so each body has
-    // some life, NOT a richly-textured planet. Low frequency + low contrast
-    // keeps the read closer to a soft glowing orb. Slowly drifts via uTime.
-    float spin = uTime * (0.03 + 0.03 * fract(vSeed * 1.7)) + vSeed * 6.2831;
-    vec3 sN = rotX(vSeed * 0.7) * rotY(spin) * vObjPos;
-    float surf = fbm(vec3(sN.x * 1.6, sN.y * 3.0, sN.z * 1.6) + vSeed * 9.0);
-    surf = smoothstep(0.25, 0.85, surf);
-    vec3 albedo = mix(base * 0.74, mix(base, vec3(1.0), 0.16), surf);
+    // Crisp constant-width outline stroke centred at ~85% radius, plus a soft
+    // glow that blooms outward toward the rim.
+    float band   = abs(rho - 0.85);
+    float stroke = 1.0 - smoothstep(0.02, 0.15, band);
+    float glow   = smoothstep(0.42, 1.0, rho);
+    // Gentle per-node breathing so the glow shimmers rather than sits static.
+    float pulse  = 0.85 + 0.15 * sin(uTime * 1.1 + vSeed * 6.2831);
+    float fill   = 0.04; // a whisper of interior tint — not a hard hole
 
-    // Day/night terminator — a single directional star light.
-    vec3 L = normalize(vec3(0.5, 0.55, 0.62));
-    float ndl = dot(n, L);
-    float day = smoothstep(-0.12, 0.42, ndl);
-    vec3 lit = albedo * (0.10 + day);
+    vec3 col = base * (1.9 * stroke + glow * 0.6 * pulse + fill);
+    col *= uGlowIntensity;
 
-    // Specular star-glint on the day side.
-    vec3 H = normalize(L + v);
-    float spec = pow(max(dot(n, H), 0.0), 36.0) * day * 0.5;
-
-    // Atmosphere: Fresnel rim in a brightened hue → glowing halo through bloom.
-    float fresnel = pow(1.0 - NdotV, 3.0);
-    vec3 atmo = (base + vec3(0.12)) * 1.7;
-
-    vec3 color = lit;
-    color += vec3(spec);
-    color += atmo * fresnel * 0.9;
-    color *= uGlowIntensity;
-
-    gl_FragColor = vec4(color, 1.0);
+    float alpha = clamp(stroke * 1.25 + glow * 0.35 + fill, 0.0, 1.0);
+    if (alpha < 0.012) discard;
+    gl_FragColor = vec4(col, alpha);
   }
 `;
 
@@ -146,9 +119,10 @@ export function createNodeMesh(
 ): NodeMeshResult {
   const nc = nodes.length;
 
-  // Adaptive geometry quality
-  const segments = nc > 50000 ? 8 : nc > 15000 ? 12 : 16;
-  const rings = nc > 50000 ? 6 : nc > 15000 ? 8 : 12;
+  // Adaptive geometry quality. The ring is drawn from the sphere's silhouette,
+  // so small graphs get extra segments for a perfectly smooth outline.
+  const segments = nc > 50000 ? 8 : nc > 15000 ? 12 : nc > 3000 ? 20 : 32;
+  const rings = nc > 50000 ? 6 : nc > 15000 ? 8 : nc > 3000 ? 12 : 20;
   const sphereGeo = new THREE.SphereGeometry(1, segments, rings);
 
   const material = new THREE.ShaderMaterial({
@@ -158,8 +132,11 @@ export function createNodeMesh(
     },
     vertexShader: NODE_VERTEX_SHADER,
     fragmentShader: NODE_FRAGMENT_SHADER,
-    transparent: false,
-    depthWrite: true,
+    // Hollow glowing ring: blend the stroke + glow over the scene, and don't
+    // write depth so overlapping rings / edges show through the open centres.
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.NormalBlending,
   });
 
   // Per-instance seed → each planet gets a unique surface pattern, spin speed
