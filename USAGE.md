@@ -128,6 +128,19 @@ function MyGraph() {
 | `renderer` | `RendererConfig` | `{ antialias: false, pixelRatioMax: 1.5 }` | WebGL configuration |
 | `labelFormatter` | `(node: GraphNode) => string` | — | Custom label text formatter |
 | `nodeValueAccessor` | `(node: GraphNode) => number` | — | Custom node size accessor |
+| `onContextMenu` | `(node, pos) => void` | — | See handler type in `src/types/events.ts` |
+| `onLinkClick` | `(link) => void` | — | See handler type in `src/types/events.ts` |
+| `onLinkHover` | `(link \| null) => void` | — | See handler type in `src/types/events.ts` |
+| `onNodeDrag` | `NodeDragHandler` | — | See handler type in `src/types/events.ts` |
+| `onNodeDragEnd` | `NodeDragHandler` | — | See handler type in `src/types/events.ts` |
+| `onLayoutSettled` | `LayoutSettledHandler` | — | See handler type in `src/types/events.ts` |
+| `onLayoutTick` | `LayoutTickHandler` | — | See handler type in `src/types/events.ts` |
+| `visibleNodeIds` | `ReadonlySet<string> \| string[] \| null` | `null` | Node filter (section 19) |
+| `linkVisibility` | `((link) => boolean) \| null` | `null` | Edge filter (section 19) |
+| `enableNodeDrag` | `boolean` | `true` | Allow dragging nodes |
+| `clickToFocus` | `boolean` | `true` | Fly camera to node on click |
+| `hoverHighlight` | `boolean` | `false` | Highlight neighborhood on hover |
+| `hoverHighlightHops` | `number` | `1` | Hops highlighted on hover |
 
 ### `GraphData`
 
@@ -201,7 +214,7 @@ const renderer = graphRef.current?.getRenderer();
 const camera = graphRef.current?.getCamera();
 
 // Capture screenshot
-const blob = await graphRef.current?.screenshot();
+const dataUrl = graphRef.current?.captureScreenshot(); // PNG data URL or null
 ```
 
 ### Method Reference
@@ -217,7 +230,12 @@ const blob = await graphRef.current?.screenshot();
 | `getScene` | `() → THREE.Scene \| null` | Access the Three.js scene |
 | `getRenderer` | `() → THREE.WebGLRenderer \| null` | Access the WebGL renderer |
 | `getCamera` | `() → THREE.PerspectiveCamera \| null` | Access the camera |
-| `screenshot` | `() → Promise<Blob \| null>` | Capture current view as PNG blob |
+| `captureScreenshot` | `() → string \| null` | Capture current view as a PNG data URL (synchronous; null if unavailable) |
+| `reheatLayout` | `() → void` | Re-run the force layout from current positions |
+| `hasUserAdjustedCamera` | `() → boolean` | True once the user has moved the camera |
+| `panTo` | `(x, y, duration?) → void` | Pan to world (x, y) keeping the current zoom |
+| `getGraphSnapshot` | `() → GraphSnapshot \| null` | Node position/color/visibility buffers for overlays |
+| `getViewportRect` | `() → ViewportRect \| null` | Camera footprint on the z=0 plane |
 
 ---
 
@@ -287,6 +305,8 @@ const myTheme: ThemeConfig = {
 
 **Minimal** — Muted, professional tones on a dark navy background.
 
+**Paper** — Light background preset (see section 19).
+
 ---
 
 ## 7. Style Configuration
@@ -323,16 +343,18 @@ Control all visual parameters:
 | `nodeMaxSize` | `number` | `15` | Maximum node sphere radius |
 | `edgeOpacity` | `number` | `0.15` | Edge line opacity (0–1) |
 | `edgeWidthScale` | `number` | `1.0` | Edge line width multiplier |
-| `bloomStrength` | `number` | `0.6` | Glow effect intensity |
-| `bloomRadius` | `number` | `0.1` | Glow spread radius |
+| `bloomStrength` | `number` | `0.72` | Glow effect intensity |
+| `bloomRadius` | `number` | `0.32` | Glow spread radius |
 | `bloomThreshold` | `number` | `0.1` | Brightness threshold for glow |
 | `starField` | `boolean` | `true` | Show background star particles |
+| `nebula` | `boolean` | `true` | Drifting nebula backdrop (dark backgrounds only) |
 | `fogDensity` | `number` | `0.0006` | Exponential fog density (0 = disabled) |
 | `autoOrbit` | `boolean` | `false` | Auto-rotate camera |
 | `labelScale` | `number` | `1.0` | Label text size multiplier |
 | `labelThreshold` | `number` | `0.8` | Label visibility distance (0–1) |
 | `showLabels` | `boolean` | `true` | Show labels at all |
 | `maxLabels` | `number` | `150` | Maximum visible labels at once |
+| `flySpeed` | `number` | `1.0` | Fly camera thrust multiplier |
 
 > **Note:** `edgeWidthScale` is applied as `linewidth` on `THREE.LineBasicMaterial`. Due to a WebGL limitation, most platforms only support `linewidth: 1`. For true variable-width lines, consider a custom post-processing approach.
 
@@ -684,7 +706,7 @@ function StylePanel({ style, onChange }) {
 
 function App() {
   const [style, setStyle] = useState({
-    bloomStrength: 0.6,
+    bloomStrength: 0.72,
     fogDensity: 0.0006,
     showLabels: true,
   });
@@ -701,15 +723,13 @@ function App() {
 ### Screenshot
 
 ```tsx
-async function handleScreenshot() {
-  const blob = await graphRef.current?.screenshot();
-  if (blob) {
-    const url = URL.createObjectURL(blob);
+function handleScreenshot() {
+  const url = graphRef.current?.captureScreenshot(); // PNG data URL
+  if (url) {
     const a = document.createElement("a");
     a.href = url;
     a.download = "graph-screenshot.png";
     a.click();
-    URL.revokeObjectURL(url);
   }
 }
 ```
@@ -798,6 +818,7 @@ export default nextConfig;
 ```typescript
 // Components
 export { NetworkGraph3D } from "@cocorof/graphier";
+export { GraphMinimap } from "@cocorof/graphier";
 export { NodeDetailPanel } from "@cocorof/graphier";
 export { SubgraphView2D } from "@cocorof/graphier";
 
@@ -811,8 +832,12 @@ export type {
   StyleConfig,
   LayoutConfig,
   RendererConfig,
+  NavigationConfig,
   NetworkGraph3DRef,
+  GraphSnapshot,
+  ViewportRect,
   NetworkGraph3DProps,
+  GraphMinimapProps,
   NodeDetailPanelProps,
   SubgraphView2DProps,
   SubgraphResult,
@@ -821,7 +846,12 @@ export type {
   NodeEventHandler,
   NullableNodeEventHandler,
   LinkEventHandler,
+  NullableLinkEventHandler,
   BackgroundClickHandler,
+  ContextMenuHandler,
+  NodeDragHandler,
+  LayoutSettledHandler,
+  LayoutTickHandler,
   ResolvedTheme,
 } from "@cocorof/graphier";
 
@@ -832,6 +862,7 @@ export {
   celestial,
   neon,
   minimal,
+  paper,
   resolveTheme,
   buildSubgraph,
   animateCamera,
@@ -863,9 +894,9 @@ export {
 ### Rendering Architecture
 
 - **2 GPU draw calls total**: 1 InstancedMesh for all nodes + 1 LineSegments for all edges
-- **Custom GLSL shaders**: Fresnel rim glow + subsurface scatter on nodes
+- **Custom GLSL shaders**: nodes render as glowing, bloom-lit hollow rings
 - **Web Worker layout**: Force simulation runs off main thread via transferable `Float32Array`
-- **Adaptive LOD**: Sphere segment count adapts to graph size (16/12/8 segments)
+- **Adaptive LOD**: Node sphere segment count adapts to graph size (32/20/12/8 segments at ≤3k/≤15k/≤50k/>50k nodes)
 
 ### Auto-Adaptive Optimizations
 
@@ -873,9 +904,9 @@ The renderer automatically adapts to graph size:
 
 | Graph Size | Bloom | Fog | Edge Opacity | LOD |
 |------------|-------|-----|--------------|-----|
-| < 5,000 | Full | Full | 0.15 | 16 segments |
-| 5,000–15,000 | Reduced resolution | Reduced | Lower | 12 segments |
-| > 15,000 | Minimal | Disabled | Minimal | 8 segments |
+| < 5,000 | Full | Full | 0.15 | 20-32 segments |
+| 5,000–15,000 | Reduced resolution | Reduced | 0.15 | 12-20 segments |
+| > 15,000 | Minimal | Disabled | 0.1 | 8-12 segments |
 
 ### Tips for Large Graphs
 
@@ -988,4 +1019,4 @@ same way — just set a light `backgroundColor` (and optionally
 
 ## License
 
-MIT
+Apache License 2.0. See [LICENSE](./LICENSE).

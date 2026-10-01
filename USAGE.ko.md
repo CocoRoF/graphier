@@ -128,6 +128,19 @@ function MyGraph() {
 | `renderer` | `RendererConfig` | `{ antialias: false, pixelRatioMax: 1.5 }` | WebGL 설정 |
 | `labelFormatter` | `(node: GraphNode) => string` | — | 커스텀 라벨 텍스트 포맷터 |
 | `nodeValueAccessor` | `(node: GraphNode) => number` | — | 커스텀 노드 크기 접근자 |
+| `onContextMenu` | `(node, pos) => void` | — | 타입 정의 `src/types/events.ts` 참고 |
+| `onLinkClick` | `(link) => void` | — | 타입 정의 `src/types/events.ts` 참고 |
+| `onLinkHover` | `(link \| null) => void` | — | 타입 정의 `src/types/events.ts` 참고 |
+| `onNodeDrag` | `NodeDragHandler` | — | 타입 정의 `src/types/events.ts` 참고 |
+| `onNodeDragEnd` | `NodeDragHandler` | — | 타입 정의 `src/types/events.ts` 참고 |
+| `onLayoutSettled` | `LayoutSettledHandler` | — | 타입 정의 `src/types/events.ts` 참고 |
+| `onLayoutTick` | `LayoutTickHandler` | — | 타입 정의 `src/types/events.ts` 참고 |
+| `visibleNodeIds` | `ReadonlySet<string> \| string[] \| null` | `null` | 노드 필터 (섹션 19) |
+| `linkVisibility` | `((link) => boolean) \| null` | `null` | 엣지 필터 (섹션 19) |
+| `enableNodeDrag` | `boolean` | `true` | 노드 드래그 허용 |
+| `clickToFocus` | `boolean` | `true` | 클릭 시 카메라 이동 |
+| `hoverHighlight` | `boolean` | `false` | 호버 시 이웃 강조 |
+| `hoverHighlightHops` | `number` | `1` | 호버 강조 홉 수 |
 
 ### `GraphData`
 
@@ -201,7 +214,7 @@ const renderer = graphRef.current?.getRenderer();
 const camera = graphRef.current?.getCamera();
 
 // 스크린샷 캡처
-const blob = await graphRef.current?.screenshot();
+const dataUrl = graphRef.current?.captureScreenshot(); // PNG data URL or null
 ```
 
 ### 메서드 레퍼런스
@@ -217,7 +230,12 @@ const blob = await graphRef.current?.screenshot();
 | `getScene` | `() → THREE.Scene \| null` | Three.js 씬 접근 |
 | `getRenderer` | `() → THREE.WebGLRenderer \| null` | WebGL 렌더러 접근 |
 | `getCamera` | `() → THREE.PerspectiveCamera \| null` | 카메라 접근 |
-| `screenshot` | `() → Promise<Blob \| null>` | 현재 화면을 PNG blob으로 캡처 |
+| `captureScreenshot` | `() → string \| null` | 현재 화면을 PNG data URL로 캡처 (동기, 실패 시 null) |
+| `reheatLayout` | `() → void` | 현재 위치에서 force 레이아웃 재실행 |
+| `hasUserAdjustedCamera` | `() → boolean` | 사용자가 카메라를 움직였는지 여부 |
+| `panTo` | `(x, y, duration?) → void` | 현재 줌을 유지하며 월드 (x, y)로 이동 |
+| `getGraphSnapshot` | `() → GraphSnapshot \| null` | 미니맵 등 오버레이용 노드 버퍼 |
+| `getViewportRect` | `() → ViewportRect \| null` | z=0 평면 위 카메라 시야 영역 |
 
 ---
 
@@ -287,6 +305,8 @@ const myTheme: ThemeConfig = {
 
 **Minimal** — 다크 네이비 배경 위의 차분하고 전문적인 톤.
 
+**Paper** — 밝은 배경 프리셋 (19장 참고).
+
 ---
 
 ## 7. 스타일 설정
@@ -323,16 +343,18 @@ const myTheme: ThemeConfig = {
 | `nodeMaxSize` | `number` | `15` | 최대 노드 구체 반경 |
 | `edgeOpacity` | `number` | `0.15` | 엣지 라인 불투명도 (0–1) |
 | `edgeWidthScale` | `number` | `1.0` | 엣지 라인 두께 배율 |
-| `bloomStrength` | `number` | `0.6` | 글로우 효과 강도 |
-| `bloomRadius` | `number` | `0.1` | 글로우 확산 반경 |
+| `bloomStrength` | `number` | `0.72` | 글로우 효과 강도 |
+| `bloomRadius` | `number` | `0.32` | 글로우 확산 반경 |
 | `bloomThreshold` | `number` | `0.1` | 글로우의 밝기 임계값 |
 | `starField` | `boolean` | `true` | 배경 별 파티클 표시 |
+| `nebula` | `boolean` | `true` | 드리프트하는 성운 배경 (어두운 배경에서만 표시) |
 | `fogDensity` | `number` | `0.0006` | 지수 안개 밀도 (0 = 비활성) |
 | `autoOrbit` | `boolean` | `false` | 카메라 자동 회전 |
 | `labelScale` | `number` | `1.0` | 라벨 텍스트 크기 배율 |
 | `labelThreshold` | `number` | `0.8` | 라벨 가시 거리 (0–1) |
 | `showLabels` | `boolean` | `true` | 라벨 표시 여부 |
 | `maxLabels` | `number` | `150` | 동시에 표시되는 최대 라벨 수 |
+| `flySpeed` | `number` | `1.0` | fly 카메라 추력 배율 |
 
 > **참고:** `edgeWidthScale`은 `THREE.LineBasicMaterial`의 `linewidth`로 적용됩니다. WebGL 제한으로 인해 대부분의 플랫폼에서 `linewidth: 1`만 지원됩니다. 실제 가변 너비 라인이 필요한 경우 커스텀 후처리 방식을 고려하세요.
 
@@ -684,7 +706,7 @@ function StylePanel({ style, onChange }) {
 
 function App() {
   const [style, setStyle] = useState({
-    bloomStrength: 0.6,
+    bloomStrength: 0.72,
     fogDensity: 0.0006,
     showLabels: true,
   });
@@ -701,15 +723,13 @@ function App() {
 ### 스크린샷
 
 ```tsx
-async function handleScreenshot() {
-  const blob = await graphRef.current?.screenshot();
-  if (blob) {
-    const url = URL.createObjectURL(blob);
+function handleScreenshot() {
+  const url = graphRef.current?.captureScreenshot(); // PNG data URL
+  if (url) {
     const a = document.createElement("a");
     a.href = url;
     a.download = "graph-screenshot.png";
     a.click();
-    URL.revokeObjectURL(url);
   }
 }
 ```
@@ -798,6 +818,7 @@ export default nextConfig;
 ```typescript
 // 컴포넌트
 export { NetworkGraph3D } from "@cocorof/graphier";
+export { GraphMinimap } from "@cocorof/graphier";
 export { NodeDetailPanel } from "@cocorof/graphier";
 export { SubgraphView2D } from "@cocorof/graphier";
 
@@ -811,8 +832,12 @@ export type {
   StyleConfig,
   LayoutConfig,
   RendererConfig,
+  NavigationConfig,
   NetworkGraph3DRef,
+  GraphSnapshot,
+  ViewportRect,
   NetworkGraph3DProps,
+  GraphMinimapProps,
   NodeDetailPanelProps,
   SubgraphView2DProps,
   SubgraphResult,
@@ -821,7 +846,12 @@ export type {
   NodeEventHandler,
   NullableNodeEventHandler,
   LinkEventHandler,
+  NullableLinkEventHandler,
   BackgroundClickHandler,
+  ContextMenuHandler,
+  NodeDragHandler,
+  LayoutSettledHandler,
+  LayoutTickHandler,
   ResolvedTheme,
 } from "@cocorof/graphier";
 
@@ -832,6 +862,7 @@ export {
   celestial,
   neon,
   minimal,
+  paper,
   resolveTheme,
   buildSubgraph,
   animateCamera,
@@ -863,9 +894,9 @@ export {
 ### 렌더링 아키텍처
 
 - **총 2회 GPU 드로우 콜**: 모든 노드를 위한 1개 InstancedMesh + 모든 엣지를 위한 1개 LineSegments
-- **커스텀 GLSL 셰이더**: 노드의 프레넬 림 글로우 + 서브서피스 스캐터
+- **커스텀 GLSL 셰이더**: 노드를 블룸으로 빛나는 속 빈 링으로 렌더링
 - **Web Worker 레이아웃**: 전송 가능한 `Float32Array`를 통해 메인 스레드 외부에서 포스 시뮬레이션 실행
-- **적응형 LOD**: 구체 세그먼트 수가 그래프 크기에 따라 조절 (16/12/8 세그먼트)
+- **적응형 LOD**: 노드 구체 세그먼트 수가 그래프 크기에 따라 조절 (노드 3천 이하/1.5만 이하/5만 이하/초과: 32/20/12/8 세그먼트)
 
 ### 자동 적응 최적화
 
@@ -873,9 +904,9 @@ export {
 
 | 그래프 크기 | 블룸 | 안개 | 엣지 불투명도 | LOD |
 |------------|------|------|-------------|-----|
-| < 5,000 | 풀 | 풀 | 0.15 | 16 세그먼트 |
-| 5,000–15,000 | 해상도 감소 | 감소 | 낮음 | 12 세그먼트 |
-| > 15,000 | 최소 | 비활성 | 최소 | 8 세그먼트 |
+| < 5,000 | 풀 | 풀 | 0.15 | 20-32 세그먼트 |
+| 5,000–15,000 | 해상도 감소 | 감소 | 0.15 | 12-20 세그먼트 |
+| > 15,000 | 최소 | 비활성 | 0.1 | 8-12 세그먼트 |
 
 ### 대규모 그래프 팁
 
@@ -984,6 +1015,6 @@ normal로 전환되고(가산 블렌딩은 흰 배경에서 사라짐), "bright"
 페이드됩니다. 커스텀 라이트 테마도 밝은 `backgroundColor`만 지정하면
 동일하게 동작합니다(필요 시 `blending: "normal"`).
 
-## 라이센스
+## 라이선스
 
-MIT
+Apache License 2.0. [LICENSE](./LICENSE) 참고.

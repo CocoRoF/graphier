@@ -1,53 +1,11 @@
 # Graphier
 
-High-performance 3D/2D graph renderer for React — powered by Three.js and d3-force-3d.
+High-performance 3D/2D graph renderer for React, built on Three.js with a d3-force-3d layout running in a Web Worker.
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+[![npm](https://img.shields.io/npm/v/@cocorof/graphier)](https://www.npmjs.com/package/@cocorof/graphier)
+![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 
-## Features
-
-- **2 GPU draw calls** — InstancedMesh (nodes) + LineSegments (edges) for maximum performance
-- **Web Worker layout** — Force-directed simulation off the main thread (d3-force-3d)
-- **Custom GLSL shaders** — Fresnel rim glow + subsurface scatter on every node
-- **Post-processing** — UnrealBloomPass glow with adaptive resolution
-- **Auto-adaptive** — Layout, LOD, bloom, and fog scale automatically with graph size
-- **360 keyboard camera** — Full spherical rotation with quaternion-based controls, no gimbal lock
-- **Incremental updates** — `appendData()` adds nodes/links without full rebuild
-- **Position preservation** — Existing node positions survive data changes
-- **Theme system** — 3 built-in presets (celestial, neon, minimal) + fully customizable
-- **Node Detail Panel** — Modal with navigation history, connections list, and 3D subgraph
-- **2D Subgraph View** — Lightweight canvas-based neighborhood renderer
-- **Graph Analysis** — Tree-shakeable analytics module (`graphier/analysis`), zero Three.js dependency
-- **TypeScript** — Full type safety with exported types
-- **Dual ESM/CJS** — Works in all bundler configurations
-
-## 2D Mode, Filtering & Minimap (v1.4)
-
-```tsx
-const ref = useRef<NetworkGraph3DRef>(null);
-
-<NetworkGraph3D
-  ref={ref}
-  data={data}
-  layout={{ dimensions: 2, clusterBy: "type" }}  // flat Obsidian-style plane
-  theme="paper"                                   // light theme preset
-  style={{ starField: false, bloomStrength: 0, fogDensity: 0 }}
-  visibleNodeIds={visibleIds}   // hide/show WITHOUT re-running layout
-  clickToFocus={false}          // select on click, no camera flight
-  hoverHighlight                // neighbor highlight on hover
-/>
-<GraphMinimap graphRef={ref} width={200} height={140} />
-```
-
-- `layout.dimensions: 2` — flat Obsidian-style plane: simulation runs in 2D (z locked to 0). Left-drag pans, right-drag tilts/orbits the world, wheel/pinch zooms, arrows/WASD pan and z/x zoom (v1.4.1).
-- `enableNodeDrag={false}` — left-drag always reaches the camera even over nodes; essential for dense graphs (v1.4.1).
-- `layout.clusterBy: "type" | "group"` + `clusterStrength` — pulls same-key nodes toward a shared centroid so categories form visible clusters.
-- `linkVisibility={(link) => bool}` — reheat-free per-edge filter (e.g. hide a link type).
-- `visibleNodeIds` — client-side filter; hidden nodes/edges/labels vanish via per-instance scale + collapsed segments. Positions are preserved: toggling filters never reheats the simulation.
-- `hoverHighlight` / `hoverHighlightHops` — Obsidian-style neighborhood emphasis on hover (selection wins while active).
-- `theme="paper"` — light background preset; edge blending switches to normal automatically (additive lines vanish on white) and highlight/dim directions invert.
-- `renderer.navigation` — remap pointer/keyboard navigation per consumer, e.g. `{ leftButton: "pan", rightButton: "rotate", keyboard: "pan" }` for pan-first 3D graphs (v1.4.2).
-- `GraphMinimap` — 2D-canvas overview (no second WebGL context): draws all visible nodes + the camera viewport rectangle, click/drag to pan. Powered by `ref.getGraphSnapshot()` / `ref.getViewportRect()` / `ref.panTo(x, y)`.
+Nodes are drawn as one `InstancedMesh` and edges as one `LineSegments`, so a graph costs two draw calls regardless of size. Layout, level of detail, bloom and fog adapt to the node count automatically.
 
 ## Install
 
@@ -55,7 +13,7 @@ const ref = useRef<NetworkGraph3DRef>(null);
 npm install @cocorof/graphier three react react-dom
 ```
 
-**Peer dependencies:** `react >= 18`, `react-dom >= 18`, `three >= 0.150`
+Peer dependencies: `react >= 18`, `react-dom >= 18`, `three >= 0.150`. The package ships ESM and CJS builds with type declarations.
 
 ## Quick Start
 
@@ -84,62 +42,76 @@ export default function App() {
 }
 ```
 
+The component fills its container, so give the parent an explicit size. `type` and `group` map to theme colors; `val` controls node size.
+
+## Features
+
+- Web Worker force layout (d3-force-3d) off the main thread; positions survive data changes
+- 3D or flat 2D mode (`layout.dimensions: 2`), with optional `layout.clusterBy` (`"type"` or `"group"`)
+- Nodes render as glowing, bloom-lit rings; star field, nebula backdrop and fog are optional
+- Reheat-free filtering with `visibleNodeIds` and `linkVisibility`
+- Click-to-focus, hover neighborhood highlight, N-hop selection highlight
+- Pointer and keyboard navigation (fly, orbit or pan), remappable via `renderer.navigation`
+- Incremental updates with `appendData()` (existing positions are kept)
+- Four theme presets (`celestial`, `neon`, `minimal`, `paper` for light backgrounds) or a custom `ThemeConfig`
+- Extra components: `GraphMinimap`, `NodeDetailPanel`, `SubgraphView2D`, plus `buildSubgraph`
+- `@cocorof/graphier/analysis`: graph statistics with no Three.js dependency
+
+## NetworkGraph3D props
+
+| Prop | Description |
+|------|-------------|
+| `data` | `{ nodes, links }` (required) |
+| `theme` | Preset name or `ThemeConfig` (default `"celestial"`) |
+| `style` | `StyleConfig`: node size range, edge opacity, bloom, star field, nebula, fog, labels, `flySpeed`, `autoOrbit` |
+| `layout` | `LayoutConfig`: `charge`, `linkDistance`, `alphaDecay`, `velocityDecay`, `spreadFactor`, `settledThreshold`, `dimensions`, `clusterBy`, `clusterStrength` |
+| `renderer` | `RendererConfig`: `antialias`, `pixelRatioMax`, `cameraMode`, `navigation` |
+| `selectedNodeId`, `highlightHops` | Controlled selection and highlight radius (default 3) |
+| `visibleNodeIds`, `linkVisibility` | Filters that never re-run the layout |
+| `enableNodeDrag`, `clickToFocus`, `hoverHighlight`, `hoverHighlightHops` | Interaction options |
+| `labelFormatter`, `nodeValueAccessor` | Custom label text and node size |
+| `onNodeClick`, `onNodeDoubleClick`, `onNodeHover`, `onContextMenu`, `onLinkClick`, `onLinkHover`, `onNodeDrag`, `onNodeDragEnd`, `onLayoutSettled`, `onLayoutTick` | Event callbacks |
+
+Defaults for every option are in [USAGE.md](./USAGE.md) and in the exported `DEFAULT_STYLE` / `DEFAULT_LAYOUT`.
+
 ## Ref API
 
 ```tsx
-const graphRef = useRef<NetworkGraph3DRef>(null);
+import { useRef } from "react";
+import { NetworkGraph3D, GraphMinimap, type NetworkGraph3DRef } from "@cocorof/graphier";
 
-graphRef.current?.focusNode("alice", 1200);
-graphRef.current?.zoomToFit(800, 100);
-graphRef.current?.zoomIn();
-graphRef.current?.zoomOut();
-graphRef.current?.appendData(newNodes, newLinks);
-graphRef.current?.screenshot();
+const ref = useRef<NetworkGraph3DRef>(null);
+
+<NetworkGraph3D ref={ref} data={data} layout={{ dimensions: 2, clusterBy: "type" }} theme="paper" />
+<GraphMinimap graphRef={ref} width={200} height={140} />
+
+ref.current?.focusNode("alice", 1200);
+ref.current?.zoomToFit(800, 100);
+ref.current?.appendData(newNodes, newLinks); // returns number of nodes added
+const png = ref.current?.captureScreenshot(); // PNG data URL
 ```
 
-## Theme & Style
+Methods: `cameraPosition`, `zoomToFit`, `zoomIn`, `zoomOut`, `focusNode`, `appendData`, `reheatLayout`, `panTo`, `captureScreenshot`, `hasUserAdjustedCamera`, `getScene`, `getRenderer`, `getCamera`, `getGraphSnapshot`, `getViewportRect`.
 
-```tsx
-<NetworkGraph3D
-  data={data}
-  theme="celestial"              // or "neon", "minimal", or a ThemeConfig object
-  style={{
-    bloomStrength: 0.7,
-    fogDensity: 0.0004,
-    nodeMinSize: 2,
-    nodeMaxSize: 18,
-    showLabels: true,
-    maxLabels: 200,
-  }}
-/>
-```
+## Analysis
 
-## Analysis Module
-
-```tsx
+```ts
 import { analyzeGraph } from "@cocorof/graphier/analysis";
 
 const stats = analyzeGraph(data);
-// stats.nodeCount, stats.density, stats.avgDegree, stats.topByDegree(10), ...
+// nodeCount, linkCount, density, avgDegree, maxDegree, minDegree, degreeMap,
+// nodesByType, linksByType, topByDegree(n)
 ```
 
-## Keyboard Controls
+## Keyboard
 
-| Key | Action |
-|-----|--------|
-| `Z` / `X` | Zoom in / out |
-| Arrow keys | 360 camera rotation |
-| `Escape` | Deselect |
-
-## Documentation
-
-- [USAGE.md](./USAGE.md) — Full English documentation
-- [USAGE.ko.md](./USAGE.ko.md) — 한국어 문서
+Keys apply while the graph container is focused. In fly mode (default in 3D) `Z`/`X` thrust forward/back and arrows or WASD steer; in orbit mode `Z`/`X` zoom and arrows orbit; in 2D (or `keyboard: "pan"`) arrows/WASD pan and `Z`/`X` zoom. `Escape` deselects.
 
 ## Next.js / SSR
 
+The renderer needs the browser. Load it client-only:
+
 ```tsx
-// app/page.tsx
 "use client";
 import dynamic from "next/dynamic";
 const GraphView = dynamic(() => import("./GraphView"), { ssr: false });
@@ -147,21 +119,24 @@ const GraphView = dynamic(() => import("./GraphView"), { ssr: false });
 
 ```js
 // next.config.js
-const nextConfig = { transpilePackages: ["@cocorof/graphier"] };
+module.exports = { transpilePackages: ["@cocorof/graphier"] };
 ```
 
-## Architecture
+## Development
 
+```bash
+npm install
+npm run typecheck  # tsc --noEmit
+npm run build      # regenerate inlined worker, typecheck, vite build -> dist/
 ```
-NetworkGraph3D
-├── InstancedMesh        (all nodes → 1 draw call)
-├── LineSegments          (all edges → 1 draw call)
-├── Web Worker            (d3-force-3d layout, off main thread)
-├── UnrealBloomPass       (post-processing glow)
-├── Sprite labels         (distance-culled, texture-cached)
-└── Keyboard controls     (quaternion-based 360 rotation)
-```
+
+`src/layout/worker-inline.ts` is generated by `scripts/build-worker.js` from the worker source; rerun `npm run build` after changing the worker. The repository has no automated test suite.
+
+## Documentation
+
+- [USAGE.md](./USAGE.md): full API reference (English)
+- [USAGE.ko.md](./USAGE.ko.md): Korean version
 
 ## License
 
-MIT
+Apache License 2.0. See [LICENSE](./LICENSE).
