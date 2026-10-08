@@ -388,6 +388,8 @@ The force-directed layout runs in a Web Worker (off main thread):
 | `alphaDecay` | `"auto" \| number` | `"auto"` | Simulation cooling rate |
 | `velocityDecay` | `number` | `0.4` | Velocity damping (0–1) |
 | `settledThreshold` | `number` | `0.005` | Alpha threshold to consider layout settled |
+| `preset` | `"ignore" \| "seed" \| "pin"` | `"ignore"` | Use positions already on the nodes (`node.x/y/z`): start from them (`seed`) or keep them (`pin`). Positions kept from a previous render still win. |
+| `initialAlpha` | `number` | `1` | Starting simulation energy. 0.2 to 0.3 keeps a seeded layout recognizable. |
 
 ### Auto-Adaptive Parameters
 
@@ -1016,6 +1018,37 @@ emphasis colors darken instead of whitening, and selection dimming fades
 toward the background instead of toward black. Custom light themes work the
 same way — just set a light `backgroundColor` (and optionally
 `blending: "normal"`).
+
+### OverviewGraph (v1.6.0)
+
+A 2D renderer for precomputed networks of 100k+ nodes. The server computes positions, importance, clusters and three zoom levels per item (`nz` node, `lz` label, `ez` edge), and writes them as GNC1 chunks ordered by `nz` (see `src/overview/format.ts`). The client:
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `meta` | `OverviewMeta` | required | Totals (buffer capacity), `span`, `view_px`, `zoom_levels`, optional `clusters` (named at low zoom) |
+| `chunks` | `OverviewChunk[]` | required | Decoded with `decodeChunk(buf, { label, sub })`; append to the array as chunks arrive |
+| `theme` | `"paper" \| "night" \| OverviewTheme` | `"paper"` | Colors and edge alpha |
+| `colorBy` | `"cluster" \| "category"` | `"cluster"` | Category is the chunk's `lang` byte (0 = none) |
+| `zoomBias` | `number` | `0` | `+1` shows one more level of detail than the reference density, `-1` one less |
+| `labelBudget` | `number` | `60` | Maximum labels drawn at once |
+| `nodePx` | `[number, number]` | `[3, 16]` | Node diameter range in CSS px at zoom 0 |
+| `selected` | `number \| null` | | Controlled selection (node index) |
+| `onSelect`, `onHover`, `onView`, `onQuality` | callbacks | | `onQuality` fires when slow frames lowered the detail |
+
+Ref: `flyTo(index, minZoom?)`, `flyToRef(ref, minZoom?)`, `select(index)`, `fit(animate?)`, `zoomBy(factor)`, `getView()`, `screenshot()`, and `engine` for `info(i)` and `neighbors(i)`.
+
+Chunks must be appended in order: an edge in chunk k only references nodes in chunks 0 to k. Zoom level 0 means the whole span fits `view_px` pixels; each level doubles the scale.
+
+### Seeding NetworkGraph3D from known positions (v1.6.0)
+
+```tsx
+<NetworkGraph3D data={{ nodes: nodes.map((n) => ({ ...n, x: n.ox, y: n.oy })), links }}
+  layout={{ dimensions: 2, preset: "seed", initialAlpha: 0.25 }} />
+```
+
+`preset: "pin"` keeps the given positions exactly and simulates only nodes without one. When every node has a position, no simulation runs at all.
+
+Also in v1.6.0: hover hit-testing runs at most once per frame and never while a button is held; edge hit-testing runs only when `onLinkHover` / `onLinkClick` are passed and skips hidden edges; raising `style.maxLabels` after mount no longer indexes past the label pool; bloom at strength 0 is skipped.
 
 ## License
 

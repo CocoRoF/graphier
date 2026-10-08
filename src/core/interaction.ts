@@ -29,6 +29,19 @@ export interface InteractionOptions {
    * for dense graphs where nearly every pixel raycasts to a node.
    */
   getNodeDragEnabled?: () => boolean;
+  /** When false, pointer moves skip edge hit-testing (it projects every edge). */
+  getLinkHoverEnabled?: () => boolean;
+  /** When false, clicks on empty space skip edge hit-testing. */
+  getLinkClickEnabled?: () => boolean;
+}
+
+interface EdgeData {
+  links: GraphLink[];
+  edgeNodeIndices: [number, number][];
+  edgeLinkIndices: number[];
+  positions: Float32Array;
+  /** Per-edge 1 = filtered out (not drawn, not hittable). */
+  hidden?: Uint8Array | null;
 }
 
 export interface InteractionState {
@@ -52,12 +65,7 @@ export function setupInteraction(
   getNodes: () => GraphNode[],
   callbacks: InteractionCallbacks,
   container?: HTMLElement,
-  getEdgeData?: () => {
-    links: GraphLink[];
-    edgeNodeIndices: [number, number][];
-    edgeLinkIndices: number[];
-    positions: Float32Array | null;
-  } | null,
+  getEdgeData?: () => (Omit<EdgeData, "positions"> & { positions: Float32Array | null }) | null,
   options?: InteractionOptions
 ): InteractionState {
   const raycaster = new THREE.Raycaster();
@@ -134,14 +142,28 @@ export function setupInteraction(
       }
     }
 
-    // Hover raycasting (nodes)
+    // Hover: never while a button is held (camera pan/rotate). A raycast per move
+    // against every instance is the main cost on large graphs. At most once per frame.
     if (!callbacks.onNodeHover && !callbacks.onLinkHover) return;
+    if (e.buttons !== 0) return;
+    hoverAt = { x: e.clientX, y: e.clientY };
+    if (hoverFrame) return;
+    hoverFrame = requestAnimationFrame(() => {
+      hoverFrame = 0;
+      if (hoverAt) runHover(hoverAt.x, hoverAt.y);
+    });
+  }
+
+  let hoverAt: { x: number; y: number } | null = null;
+  let hoverFrame = 0;
+
+  function runHover(clientX: number, clientY: number) {
     const nodesMesh = getNodesMesh();
     if (!nodesMesh) return;
 
     const rect = canvas.getBoundingClientRect();
-    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
     const hits = raycaster.intersectObject(nodesMesh);
@@ -163,12 +185,10 @@ export function setupInteraction(
       }
 
       // Edge hover if no node hit
-      if (callbacks.onLinkHover && getEdgeData) {
+      if (callbacks.onLinkHover && getEdgeData && (options?.getLinkHoverEnabled?.() ?? true)) {
         const edgeData = getEdgeData();
         if (edgeData?.positions) {
-          const hitLink = findNearestEdge(
-            e.clientX, e.clientY, rect, camera, edgeData as { links: GraphLink[]; edgeNodeIndices: [number, number][]; edgeLinkIndices: number[]; positions: Float32Array }
-          );
+          const hitLink = findNearestEdge(clientX, clientY, rect, camera, edgeData as EdgeData);
           if (hitLink) {
             if (lastHoveredLinkIdx !== hitLink.index) {
               lastHoveredLinkIdx = hitLink.index;
@@ -275,12 +295,10 @@ export function setupInteraction(
       }, 250);
     } else {
       // Check edge click before reporting background click
-      if (callbacks.onLinkClick && getEdgeData) {
+      if (callbacks.onLinkClick && getEdgeData && (options?.getLinkClickEnabled?.() ?? true)) {
         const edgeData = getEdgeData();
         if (edgeData?.positions) {
-          const hitLink = findNearestEdge(
-            e.clientX, e.clientY, rect, camera, edgeData as { links: GraphLink[]; edgeNodeIndices: [number, number][]; edgeLinkIndices: number[]; positions: Float32Array }
-          );
+          const hitLink = findNearestEdge(e.clientX, e.clientY, rect, camera, edgeData as EdgeData);
           if (hitLink) {
             callbacks.onLinkClick(hitLink.link);
             return;
@@ -338,6 +356,7 @@ export function setupInteraction(
   return {
     cleanup: () => {
       if (singleClickTimer) clearTimeout(singleClickTimer);
+      if (hoverFrame) cancelAnimationFrame(hoverFrame);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointermove", onPointerMove);
@@ -353,14 +372,9 @@ function findNearestEdge(
   clientY: number,
   rect: DOMRect,
   camera: THREE.PerspectiveCamera,
-  edgeData: {
-    links: GraphLink[];
-    edgeNodeIndices: [number, number][];
-    edgeLinkIndices: number[];
-    positions: Float32Array;
-  }
+  edgeData: EdgeData
 ): { link: GraphLink; index: number } | null {
-  const { links, edgeNodeIndices, edgeLinkIndices, positions } = edgeData;
+  const { links, edgeNodeIndices, edgeLinkIndices, positions, hidden } = edgeData;
   const screenX = clientX - rect.left;
   const screenY = clientY - rect.top;
   const w = rect.width;
@@ -372,6 +386,7 @@ function findNearestEdge(
   const tmpVec = new THREE.Vector3();
 
   for (let i = 0; i < edgeNodeIndices.length; i++) {
+    if (hidden && hidden[i]) continue;
     const [si, ti] = edgeNodeIndices[i];
 
     // Project source and target to screen space

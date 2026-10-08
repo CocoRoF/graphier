@@ -388,6 +388,8 @@ const myTheme: ThemeConfig = {
 | `alphaDecay` | `"auto" \| number` | `"auto"` | 시뮬레이션 냉각 속도 |
 | `velocityDecay` | `number` | `0.4` | 속도 감쇠 (0–1) |
 | `settledThreshold` | `number` | `0.005` | 레이아웃 안정화 판단 알파 임계값 |
+| `preset` | `"ignore" \| "seed" \| "pin"` | `"ignore"` | 노드에 이미 있는 좌표(`node.x/y/z`)를 쓴다. `seed` 는 거기서 시작, `pin` 은 그대로 고정. 이전 렌더에서 남은 좌표가 먼저다. |
+| `initialAlpha` | `number` | `1` | 시뮬레이션 시작 에너지. 0.2~0.3 이면 시작 배치가 알아볼 수 있게 남는다. |
 
 ### 자동 적응 파라미터
 
@@ -1014,6 +1016,37 @@ normal로 전환되고(가산 블렌딩은 흰 배경에서 사라짐), "bright"
 밝아지는 대신 어두워지며, 선택 시 딤 처리는 검정 대신 배경 쪽으로
 페이드됩니다. 커스텀 라이트 테마도 밝은 `backgroundColor`만 지정하면
 동일하게 동작합니다(필요 시 `blending: "normal"`).
+
+### OverviewGraph (v1.6.0)
+
+서버에서 미리 계산한 10만 개 이상 노드 네트워크를 그리는 2D 렌더러입니다. 서버는 좌표·중요도·군집과 항목마다 세 가지 줌 단계(`nz` 노드, `lz` 라벨, `ez` 간선)를 계산해 `nz` 순서의 GNC1 덩어리로 씁니다(`src/overview/format.ts`).
+
+| Prop | 타입 | 기본값 | 설명 |
+|------|------|--------|------|
+| `meta` | `OverviewMeta` | 필수 | 전체 수(버퍼 크기), `span`, `view_px`, `zoom_levels`, 선택적 `clusters`(낮은 줌에서 이름 표시) |
+| `chunks` | `OverviewChunk[]` | 필수 | `decodeChunk(buf, { label, sub })` 로 풀어서 도착하는 대로 배열 끝에 붙인다 |
+| `theme` | `"paper" \| "night" \| OverviewTheme` | `"paper"` | 색과 간선 투명도 |
+| `colorBy` | `"cluster" \| "category"` | `"cluster"` | category 는 덩어리의 `lang` 값(0 = 없음) |
+| `zoomBias` | `number` | `0` | `+1` 이면 기준 밀도보다 한 단계 더 보이고 `-1` 이면 한 단계 덜 |
+| `labelBudget` | `number` | `60` | 한 번에 그리는 라벨 수 상한 |
+| `nodePx` | `[number, number]` | `[3, 16]` | 줌 0 에서 노드 지름 범위(CSS px) |
+| `selected` | `number \| null` | | 제어형 선택(노드 번호) |
+| `onSelect`, `onHover`, `onView`, `onQuality` | 콜백 | | `onQuality` 는 느린 프레임 때문에 세부를 낮췄을 때 |
+
+Ref: `flyTo(index, minZoom?)`, `flyToRef(ref, minZoom?)`, `select(index)`, `fit(animate?)`, `zoomBy(factor)`, `getView()`, `screenshot()`, 그리고 `info(i)`·`neighbors(i)` 를 쓰는 `engine`.
+
+덩어리는 순서대로 붙여야 합니다. k 번째 덩어리의 간선은 0~k 번째 덩어리의 노드만 가리킵니다. 줌 0 은 전체 범위가 `view_px` 픽셀에 들어가는 배율이고 한 단계마다 두 배입니다.
+
+### 알고 있는 좌표로 NetworkGraph3D 시작하기 (v1.6.0)
+
+```tsx
+<NetworkGraph3D data={{ nodes: nodes.map((n) => ({ ...n, x: n.ox, y: n.oy })), links }}
+  layout={{ dimensions: 2, preset: "seed", initialAlpha: 0.25 }} />
+```
+
+`preset: "pin"` 은 받은 좌표를 그대로 두고 좌표 없는 노드만 시뮬레이션합니다. 모든 노드에 좌표가 있으면 시뮬레이션을 아예 돌리지 않습니다.
+
+v1.6.0 의 다른 변경: 호버 판정은 프레임당 한 번, 버튼을 누르고 있는 동안은 하지 않음. 간선 판정은 `onLinkHover`/`onLinkClick` 을 넘겼을 때만, 숨긴 간선은 건너뜀. 마운트 뒤 `style.maxLabels` 를 키워도 라벨 풀 밖을 가리키지 않음. bloom 세기 0 이면 bloom 패스를 건너뜀.
 
 ## 라이선스
 

@@ -2,7 +2,7 @@
  * Web Worker: Force-directed 3D layout using d3-force-3d.
  *
  * Messages:
- *   Main → Worker:  { type: 'init', nodes, links, params }
+ *   Main → Worker:  { type: 'init', nodes, links, params }   (nodes may carry preset x/y/z)
  *                   { type: 'stop' }
  *   Worker → Main:  { type: 'positions', positions: ArrayBuffer, alpha }
  *                   { type: 'settled' }
@@ -34,7 +34,18 @@ interface LayoutParams {
   settledThreshold: number;
   postEvery: number;
   initialRadius: number;
+  preset?: "ignore" | "seed" | "pin";
+  initialAlpha?: number;
 }
+
+interface InitNode {
+  id: string;
+  x?: number;
+  y?: number;
+  z?: number;
+}
+
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 let sim: ReturnType<typeof forceSimulation> | null = null;
 let simNodes: SimNode[] = [];
@@ -58,9 +69,11 @@ self.onmessage = (e: MessageEvent) => {
 
     const dims: 2 | 3 = params.dimensions === 2 ? 2 : 3;
 
+    const preset = params.preset ?? "ignore";
+    let pinned = 0;
     simNodes = msg.nodes.map(
-      (nd: { id: string }, i: number): SimNode => {
-        // Use preserved position if available, otherwise random placement
+      (nd: InitNode, i: number): SimNode => {
+        // Use preserved position if available, then a preset one, otherwise random placement
         const prev = initPos[nd.id];
         if (prev) {
           return {
@@ -70,6 +83,17 @@ self.onmessage = (e: MessageEvent) => {
             y: prev.y,
             z: dims === 2 ? 0 : prev.z,
           };
+        }
+        if (preset !== "ignore" && finite(nd.x) && finite(nd.y)) {
+          const z = dims === 2 || !finite(nd.z) ? 0 : nd.z;
+          const sn: SimNode & { fx?: number; fy?: number; fz?: number } = { id: nd.id, index: i, x: nd.x, y: nd.y, z };
+          if (preset === "pin") {
+            sn.fx = nd.x;
+            sn.fy = nd.y;
+            sn.fz = z;
+            pinned++;
+          }
+          return sn;
         }
         const theta = Math.random() * Math.PI * 2;
         const r = params.initialRadius * (0.5 + Math.random() * 0.5);
@@ -94,6 +118,21 @@ self.onmessage = (e: MessageEvent) => {
       }
     );
 
+    // Everything pinned: nothing to simulate, report the positions once.
+    if (preset === "pin" && pinned === n) {
+      sim = null;
+      const positions = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        positions[i * 3] = simNodes[i].x;
+        positions[i * 3 + 1] = simNodes[i].y;
+        positions[i * 3 + 2] = dims === 2 ? 0 : simNodes[i].z;
+      }
+      self.postMessage({ type: "positions", positions: positions.buffer, alpha: 0 }, [positions.buffer] as any);
+      settled = true;
+      self.postMessage({ type: "settled" });
+      return;
+    }
+
     const simLinks = msg.links.map((l: { source: string; target: string }) => ({
       source: l.source,
       target: l.target,
@@ -115,8 +154,11 @@ self.onmessage = (e: MessageEvent) => {
           .strength(0.2)
       )
       .force("center", forceCenter())
+      .alpha(params.initialAlpha ?? 1)
       .alphaDecay(params.alphaDecay)
       .velocityDecay(params.velocityDecay);
+    // A seeded layout is already arranged: center it gently instead of re-centering hard
+    if (preset !== "ignore") (sim.force("center") as any)?.strength?.(0.05);
 
     // Optional cluster force: pull nodes of the same group toward their
     // group centroid so categories form visible clusters (Obsidian look).

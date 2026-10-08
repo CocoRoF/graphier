@@ -37,6 +37,17 @@ export interface LayoutConfig {
   clusterBy?: "type" | "group" | null;
   /** Cluster attraction strength 0..1 (default: 0.05). */
   clusterStrength?: number;
+  /**
+   * What to do with positions already on the nodes (node.x / node.y / node.z):
+   *   "ignore" (default): lay out from scratch,
+   *   "seed": start from them and only tidy up (use with a low initialAlpha),
+   *   "pin": keep them exactly; only nodes without a position are simulated.
+   *            If every node has one, no simulation runs at all.
+   * Positions kept from a previous render of the same node id still win.
+   */
+  preset?: "ignore" | "seed" | "pin";
+  /** Starting simulation energy 0..1 (default: 1). 0.2–0.3 keeps a seeded layout recognizable. */
+  initialAlpha?: number;
 }
 
 export const DEFAULT_LAYOUT: Required<LayoutConfig> = {
@@ -50,4 +61,6 @@ export const DEFAULT_LAYOUT: Required<LayoutConfig> = {
   dimensions: 3,
   clusterBy: null,
   clusterStrength: 0.05,
+  preset: "ignore",
+  initialAlpha: 1,
 };
