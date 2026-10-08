@@ -436,7 +436,8 @@ export function startAnimationLoop(
 
     onTick?.();
 
-    if (state.composer) {
+    // Bloom at strength 0 is invisible but still costs several full-screen passes, so skip it
+    if (state.composer && (state.bloomPass?.strength ?? 1) > 0) {
       state.composer.render();
     } else {
       state.renderer.render(state.scene, state.camera);

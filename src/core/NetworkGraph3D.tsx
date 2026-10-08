@@ -478,12 +478,16 @@ function NetworkGraph3DInner(
           edgeNodeIndices: d.edgeNodeIndices,
           edgeLinkIndices: d.edgeLinkIndices,
           positions: d.positions,
+          hidden: hiddenEdgesRef.current,
         };
       },
       {
         getClickToFocus: () => clickToFocusRef.current,
         getIs2D: () => is2DRef.current,
         getNodeDragEnabled: () => enableNodeDragRef.current,
+        // Edge hit-testing projects every edge, so only pay for it when someone listens
+        getLinkHoverEnabled: () => !!onLinkHoverRef.current,
+        getLinkClickEnabled: () => !!onLinkClickRef.current,
       }
     );
 
@@ -741,7 +745,10 @@ function NetworkGraph3DInner(
 
     worker.postMessage({
       type: "init",
-      nodes: nodes.map((n) => ({ id: n.id })),
+      nodes:
+        layoutParams.preset === "ignore"
+          ? nodes.map((n) => ({ id: n.id }))
+          : nodes.map((n) => ({ id: n.id, x: (n as any).x, y: (n as any).y, z: (n as any).z })),
       links: links.map((l) => ({
         source: typeof l.source === "object" ? (l.source as any).id : l.source,
         target: typeof l.target === "object" ? (l.target as any).id : l.target,

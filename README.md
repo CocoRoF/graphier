@@ -57,6 +57,32 @@ The component fills its container, so give the parent an explicit size. `type` a
 - Extra components: `GraphMinimap`, `NodeDetailPanel`, `SubgraphView2D`, plus `buildSubgraph`
 - `@cocorof/graphier/analysis`: graph statistics with no Three.js dependency
 
+## Large overviews: OverviewGraph
+
+`NetworkGraph3D` simulates its layout in the browser, which is comfortable up to roughly 10 to 20 thousand nodes. For bigger networks, compute the layout once on a server and draw it with `OverviewGraph`, a 2D WebGL view built for 100k+ nodes and about a million edges:
+
+- Every node and edge carries the zoom level from which it is drawn. The GPU hides the rest from one uniform, so zooming never rebuilds buffers. Below zoom 0 (a phone showing everything) only the most important nodes remain.
+- Data arrives in chunks ordered by that level, so a phone can stop after the first one or two and a desktop can load all of them. Chunks are appended into preallocated buffers.
+- Hover and click use a spatial grid; labels come from precomputed collision-free levels and are checked again on screen.
+- Frames are drawn only when something changed. If frames get slow during interaction, detail drops a step.
+
+```tsx
+import { OverviewGraph, decodeChunk, type OverviewChunk, type OverviewMeta } from "@cocorof/graphier";
+
+const meta: OverviewMeta = await (await fetch("/data/meta.json")).json();
+const chunks: OverviewChunk[] = [];
+for (const c of meta.chunks.slice(0, 2)) {
+  const [bin, extra] = await Promise.all([fetch(`/data/${c.name}.bin`).then((r) => r.arrayBuffer()), fetch(`/data/${c.name}.json`).then((r) => r.json())]);
+  chunks.push(decodeChunk(bin, extra));
+}
+
+<OverviewGraph meta={meta} chunks={chunks} theme="paper" colorBy="cluster" onSelect={(i) => console.log(i)} style={{ width: "100%", height: 600 }} />
+```
+
+The chunk format (GNC1) is documented in `src/overview/format.ts`. Ref methods: `flyTo`, `flyToRef`, `select`, `fit`, `zoomBy`, `getView`, `screenshot`. `OverviewEngine` is the same renderer without React.
+
+To open a detailed view seeded from overview positions, pass the positions on the nodes and set `layout={{ preset: "seed", initialAlpha: 0.25 }}` (or `"pin"` to keep them exactly) on `NetworkGraph3D`.
+
 ## NetworkGraph3D props
 
 | Prop | Description |
@@ -64,7 +90,7 @@ The component fills its container, so give the parent an explicit size. `type` a
 | `data` | `{ nodes, links }` (required) |
 | `theme` | Preset name or `ThemeConfig` (default `"celestial"`) |
 | `style` | `StyleConfig`: node size range, edge opacity, bloom, star field, nebula, fog, labels, `flySpeed`, `autoOrbit` |
-| `layout` | `LayoutConfig`: `charge`, `linkDistance`, `alphaDecay`, `velocityDecay`, `spreadFactor`, `settledThreshold`, `dimensions`, `clusterBy`, `clusterStrength` |
+| `layout` | `LayoutConfig`: `charge`, `linkDistance`, `alphaDecay`, `velocityDecay`, `spreadFactor`, `settledThreshold`, `dimensions`, `clusterBy`, `clusterStrength`, `preset`, `initialAlpha` |
 | `renderer` | `RendererConfig`: `antialias`, `pixelRatioMax`, `cameraMode`, `navigation` |
 | `selectedNodeId`, `highlightHops` | Controlled selection and highlight radius (default 3) |
 | `visibleNodeIds`, `linkVisibility` | Filters that never re-run the layout |

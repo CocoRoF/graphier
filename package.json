@@ -1,7 +1,7 @@
 {
   "name": "@cocorof/graphier",
-  "version": "1.5.3",
-  "description": "High-performance 3D/2D graph renderer for React — powered by Three.js and d3-force-3d",
+  "version": "1.6.0",
+  "description": "High-performance graph renderer for React: 3D/2D force layout (Three.js, d3-force-3d) and a 2D overview engine for 100k+ precomputed nodes",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

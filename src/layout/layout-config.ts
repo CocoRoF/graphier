@@ -17,6 +17,8 @@ export interface ResolvedLayoutParams {
   settledThreshold: number;
   postEvery: number;
   initialRadius: number;
+  preset: "ignore" | "seed" | "pin";
+  initialAlpha: number;
 }
 
 /**
@@ -99,5 +101,7 @@ export function resolveLayoutParams(
     settledThreshold,
     postEvery,
     initialRadius,
+    preset: config?.preset === "seed" || config?.preset === "pin" ? config.preset : "ignore",
+    initialAlpha: Math.max(0.001, Math.min(1, config?.initialAlpha ?? 1)),
   };
 }

@@ -16,6 +16,14 @@
 export { NetworkGraph3D } from "./core/NetworkGraph3D";
 export type { NetworkGraph3DProps } from "./core/NetworkGraph3D";
 
+// ── Large overview (precomputed layout, 2D, 10k–100k+ nodes) ──
+export { OverviewGraph } from "./overview/OverviewGraph";
+export type { OverviewGraphProps, OverviewGraphRef } from "./overview/OverviewGraph";
+export { OverviewEngine, OVERVIEW_THEMES } from "./overview/engine";
+export type { OverviewEngineOptions, OverviewTheme, OverviewView } from "./overview/engine";
+export { decodeChunk } from "./overview/format";
+export type { OverviewChunk, OverviewCluster, OverviewMeta } from "./overview/format";
+
 // ── Minimap Overlay ──
 export { GraphMinimap } from "./core/Minimap";
 export type { GraphMinimapProps } from "./core/Minimap";

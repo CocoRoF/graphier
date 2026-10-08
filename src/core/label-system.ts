@@ -156,7 +156,8 @@ export function updateLabels(
   // Sort by priority: higher val + closer distance
   candidates.sort((a, b) => b.val / b.distSq - a.val / a.distSq);
 
-  const count = Math.min(candidates.length, maxLabels);
+  // The sprite pool is sized once at mount, so a larger maxLabels later must not index past it
+  const count = Math.min(candidates.length, maxLabels, state.sprites.length);
 
   for (let i = 0; i < count; i++) {
     const c = candidates[i];
