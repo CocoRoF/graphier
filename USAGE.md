@@ -1048,6 +1048,8 @@ Chunks must be appended in order: an edge in chunk k only references nodes in ch
 
 `preset: "pin"` keeps the given positions exactly and simulates only nodes without one. When every node has a position, no simulation runs at all.
 
+v1.6.1: cluster names show only when a member of the cluster is drawn at the current zoom, stay inside the canvas and are shortened with an ellipsis when wider than the screen allows; node labels near an edge are moved inward.
+
 Also in v1.6.0: hover hit-testing runs at most once per frame and never while a button is held; edge hit-testing runs only when `onLinkHover` / `onLinkClick` are passed and skips hidden edges; raising `style.maxLabels` after mount no longer indexes past the label pool; bloom at strength 0 is skipped.
 
 ## License

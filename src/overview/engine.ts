@@ -182,6 +182,17 @@ const EDGE_FRAG = /* glsl */ `
   }
 `;
 
+/** `text` shortened with an ellipsis to fit `maxW` px in the context's current font. */
+function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (ctx.measureText(text.slice(0, mid).trimEnd() + "…").width <= maxW) lo = mid; else hi = mid - 1;
+  }
+  return text.slice(0, lo).trimEnd() + "…";
+}
+
 function rgb(hex: string): [number, number, number] {
   const c = new THREE.Color(hex);
   return [c.r, c.g, c.b];
@@ -256,6 +267,8 @@ export class OverviewEngine {
   private imp0: Float32Array | null = null;
   /** Nodes by label level (lz), each list by importance: label candidates when the view is wide. */
   private labelLevels: number[][] | null = null;
+  /** Per cluster: the lowest node level and highest importance among loaded nodes (when its name may show). */
+  private clusterLow: Map<number, { nz: number; imp: number }> | null = null;
   private destroyed = false;
   private resizeObs: ResizeObserver;
 
@@ -373,6 +386,7 @@ export class OverviewEngine {
     this.n += k;
     this.imp0 = null;
     this.labelLevels = null;
+    this.clusterLow = null;
     this.paint(s0, k);
     for (const name of ["position", "aImp", "aNz"]) this.touch(this.nodeGeo.getAttribute(name) as THREE.BufferAttribute, s0, k);
     this.nodeGeo.setDrawRange(0, this.n);
@@ -584,6 +598,30 @@ export class OverviewEngine {
     return keep >= this.imp0.length ? 0 : this.imp0[keep - 1];
   }
 
+  /** A label centred at screen x, moved inward so its `tw` px stay on the canvas (the node itself stays put). */
+  private inside(x: number, tw: number): number {
+    return tw + 8 >= this.w ? this.w / 2 : Math.min(this.w - tw / 2 - 4, Math.max(tw / 2 + 4, x));
+  }
+
+  /** Clusters with at least one member drawn at level z (and above the importance cut below zoom 0). */
+  private clusterShown(z: number, cut: number): Set<number> {
+    if (!this.clusterLow) {
+      const m = new Map<number, { nz: number; imp: number }>();
+      for (let i = 0; i < this.n; i++) {
+        const c = this.cluster[i], e = m.get(c);
+        if (!e) m.set(c, { nz: this.nz[i], imp: this.imp[i] });
+        else {
+          if (this.nz[i] < e.nz) e.nz = this.nz[i];
+          if (this.imp[i] > e.imp) e.imp = this.imp[i];
+        }
+      }
+      this.clusterLow = m;
+    }
+    const out = new Set<number>();
+    for (const [c, e] of this.clusterLow) if (e.nz <= z + 1e-6 && e.imp >= cut) out.add(c);
+    return out;
+  }
+
   private renderFrame(t: number): void {
     if (this.destroyed) return;
     if (this.anim) {
@@ -695,10 +733,11 @@ export class OverviewEngine {
     if (this.selected != null) pinned.push(this.selected);
     if (this.hovered != null && this.hovered !== this.selected) pinned.push(this.hovered);
     for (const i of pinned) {
-      const [sx, sy] = this.toScreen(this.x[i], this.y[i]);
+      const [nx, sy] = this.toScreen(this.x[i], this.y[i]);
       const size = 13;
       ctx.font = `600 ${size}px ${font}`;
       const tw = ctx.measureText(this.labels[i]).width;
+      const sx = this.inside(nx, tw);
       const ly = sy - this.nodePx(i, zReal) / 2 - 10;
       occupy(sx - tw / 2 - 4, ly - 8, sx + tw / 2 + 4, ly + 8);
       halo(this.labels[i], sx, ly, size, 600, this.theme.label, 1);
@@ -707,27 +746,34 @@ export class OverviewEngine {
       const st = this.nodeState.array as Float32Array;
       const nb = this.marked.filter((i) => st[i] === 2).sort((a, b) => this.imp[b] - this.imp[a]).slice(0, 40);
       for (const i of nb) {
-        const [sx, sy] = this.toScreen(this.x[i], this.y[i]);
-        if (sx < 0 || sx > this.w || sy < 0 || sy > this.h) continue;
+        const [nx, sy] = this.toScreen(this.x[i], this.y[i]);
+        if (nx < 0 || nx > this.w || sy < 0 || sy > this.h) continue;
         ctx.font = `500 12px ${font}`;
         const tw = ctx.measureText(this.labels[i]).width;
+        const sx = this.inside(nx, tw);
         const ly = sy - this.nodePx(i, zReal) / 2 - 8;
         if (!occupy(sx - tw / 2 - 2, ly - 6, sx + tw / 2 + 2, ly + 6)) continue;
         halo(this.labels[i], sx, ly, 12, 500, this.theme.label, 0.95);
       }
     }
     if (ca > 0.02 && clusters.length && this.selected == null) {
-      // only clusters that are big on screen get a name (on a phone, fewer)
+      // Only clusters that are big on screen and have members drawn at this zoom get a name (a name over an
+      // empty area reads as a bug). Names stay inside the canvas and are shortened with an ellipsis when wide.
       const minR = Math.max(36, Math.min(this.w, this.h) * 0.07);
-      const big = clusters.filter((c) => c.r * this.view.scale >= minR).slice(0, 40);
+      const shown = this.clusterShown(z, cut);
+      const maxW = Math.min(420, this.w * 0.72);
+      const big = clusters.filter((c) => c.r * this.view.scale >= minR && shown.has(c.id)).slice(0, 40);
       for (const c of big) {
-        const [sx, sy] = this.toScreen(c.x, c.y);
+        let [sx, sy] = this.toScreen(c.x, c.y);
         if (sx < -100 || sx > this.w + 100 || sy < -40 || sy > this.h + 40) continue;
-        const size = Math.max(11, Math.min(20, 9 + Math.log2(c.size) * 1.2));
+        const size = Math.max(11, Math.min(this.w < 640 ? 16 : 20, 9 + Math.log2(c.size) * 1.2));
         ctx.font = `700 ${size}px ${font}`;
-        const tw = ctx.measureText(c.label).width;
+        const text = fitText(ctx, c.label, maxW);
+        const tw = ctx.measureText(text).width;
+        sx = Math.min(this.w - tw / 2 - 8, Math.max(tw / 2 + 8, sx));
+        sy = Math.min(this.h - size, Math.max(size, sy));
         if (!occupy(sx - tw / 2, sy - size / 2, sx + tw / 2, sy + size / 2)) continue;
-        halo(c.label, sx, sy, size, 700, this.theme.clusterLabel, ca);
+        halo(text, sx, sy, size, 700, this.theme.clusterLabel, ca);
       }
     }
     // node labels: candidates with lz ≤ current level in the viewport, by importance, no overlaps, within budget
@@ -772,10 +818,11 @@ export class OverviewEngine {
     for (const i of cand) {
       if (drawn >= budget) break;
       if (pinned.includes(i)) continue;
-      const [sx, sy] = this.toScreen(this.x[i], this.y[i]);
+      const [nx, sy] = this.toScreen(this.x[i], this.y[i]);
       const size = 11 + Math.round(this.imp[i] * 2);
       ctx.font = `500 ${size}px ${font}`;
       const tw = ctx.measureText(this.labels[i]).width;
+      const sx = this.inside(nx, tw);
       const ly = sy - this.nodePx(i, zReal) / 2 - 8;
       if (!occupy(sx - tw / 2 - 2, ly - size / 2, sx + tw / 2 + 2, ly + size / 2)) continue;
       const dim = this.selected != null && (this.nodeState.array as Float32Array)[i] < 0.5 ? 0.25 : la;
